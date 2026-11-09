@@ -43,7 +43,7 @@ required-features = ["prelude"]
 ## Feature interactions
 
 - Without `colour`, `Printer` is `ASCIISyncPrinter`.
-- Without `prelude`, import types from their modules (`mizeria::Suite`,
+- Without `prelude`, import types from their modules (`mizeria::suite::Suite`,
   `mizeria::extract::CtxMut`, …) or enable `prelude` in examples/tests only.
 - `json` is additive; bind `JsonReporter` alone, or compose with a printer via
   `Printer::stdout().and(JsonReporter::stdout())` — a suite still holds a single

@@ -13,7 +13,7 @@ pub use crate::extract::{
     StepContext, parse_from_str,
 };
 pub use crate::features::{Features, FeaturesBuilder, LoadedDocument};
-pub use crate::handler::{Call, Handler, IntoStepFuture, call};
+pub use crate::handler::{Call, Handler, HandlerMarker, IntoStepFuture, call};
 #[cfg(feature = "json")]
 pub use crate::listener::JsonReporter;
 pub use crate::listener::{

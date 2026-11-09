@@ -1,8 +1,9 @@
 //! Hot-path benches: step matching and outline placeholder expansion.
 
 use criterion::{Criterion, black_box, criterion_group, criterion_main};
+use mizeria::features::Features;
 use mizeria::statement::{Regex, Statement};
-use mizeria::{Features, Suite};
+use mizeria::suite::Suite;
 use std::time::Duration;
 
 fn many_regex_definitions(c: &mut Criterion) {
