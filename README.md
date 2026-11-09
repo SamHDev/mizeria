@@ -1,5 +1,11 @@
 # Mizeria
 
+[![Crates.io](https://img.shields.io/crates/v/mizeria.svg)](https://crates.io/crates/mizeria)
+[![Docs.rs](https://docs.rs/mizeria/badge.svg)](https://docs.rs/mizeria)
+[![Book](https://img.shields.io/badge/book-mdBook-orange)](https://samhdev.github.io/mizeria/)
+[![CI](https://github.com/SamHDev/mizeria/actions/workflows/ci.yml/badge.svg)](https://github.com/SamHDev/mizeria/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 > [!WARNING]
 > AI written prototype with a breaking API
 >
@@ -32,11 +38,14 @@ suite.given(re(r"I have (\d+) cukes"), |n: u32, cukes: GetOrDefault<Cukes>| {
 let _ = suite.run_blocking(&features);
 ```
 
-## Documentation
+## Links
 
-- **User guide (mdBook):** [book/](book/) — run `mdbook serve book`
-- **API docs:** `cargo doc --open`
+- **Book:** [samhdev.github.io/mizeria](https://samhdev.github.io/mizeria/)
+- **API docs:** [docs.rs/mizeria](https://docs.rs/mizeria)
+- **Crates.io:** [crates.io/crates/mizeria](https://crates.io/crates/mizeria)
 - **Example:** `cargo run --example withdrawing_cash`
+
+Local book preview: `mdbook serve book`
 
 ## Crate features
 
