@@ -1,0 +1,15 @@
+[package]
+name = "cutecumber"
+version = "0.1.0"
+edition = "2024"
+
+[features]
+default = ["dialects"]
+# Embed the full official Gherkin dialect catalog. Without this feature only English is available.
+dialects = []
+
+[dependencies]
+regex = "1.13.1"
+
+[dev-dependencies]
+tokio = { version = "1", features = ["macros", "rt"] }
