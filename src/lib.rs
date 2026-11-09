@@ -52,8 +52,8 @@ pub mod suite;
 pub mod tags;
 
 pub use entity::{
-    Effect, EntityBag, EntityKey, EntityRejection, Get, GetMut, GetRef, Insert, InsertNamed, Named,
-    NamedMut, NamedRef, Put, PutNamed, Remove, RemoveNamed,
+    Effect, EntityBag, EntityKey, EntityRejection, Get, GetMut, GetOrDefault, GetRef, Insert,
+    InsertNamed, Named, NamedMut, NamedOrDefault, NamedRef, Put, PutNamed, Remove, RemoveNamed,
 };
 pub use extract::{
     Ctx, CtxMut, CtxRef, DataTable, DocString, FromCapture, FromRow, FromStep, Param, StepArgument,

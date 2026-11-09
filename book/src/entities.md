@@ -32,10 +32,11 @@ fn try_withdraw(
 | Type | Behaviour |
 |---|---|
 | `Get<T>` / `Named<T>` | Clone snapshot; no lease held |
+| `GetOrDefault<T>` / `NamedOrDefault<T>` | Clone snapshot, or `T::default()` when missing |
 | `GetRef<T>` / `NamedRef<T>` | Shared lease |
 | `GetMut<T>` / `NamedMut<T>` | Exclusive lease; mutate in place |
 
-Missing entities fail the step (`EntityRejection::Missing` → `StepError`).
+Missing entities fail the step for `Get` / `GetRef` / `GetMut` (`EntityRejection::Missing` → `StepError`). `GetOrDefault` substitutes `Default` instead; locked slots and key parse failures still fail.
 
 ## Writing via effects
 

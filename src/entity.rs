@@ -400,6 +400,133 @@ where
     }
 }
 
+/// Clone-out snapshot of an entity, or [`Default`] when missing (no lease).
+///
+/// Key extraction failures and [`EntityRejection::Locked`] still fail the step.
+pub struct GetOrDefault<T, K = ()> {
+    key: K,
+    value: T,
+}
+
+/// [`GetOrDefault`] keyed by [`String`].
+pub type NamedOrDefault<T> = GetOrDefault<T, String>;
+
+impl<T, K> GetOrDefault<T, K> {
+    /// Build a snapshot with an explicit key.
+    pub fn named(key: K, value: T) -> Self {
+        Self { key, value }
+    }
+
+    /// Borrow the storage key.
+    pub fn key(&self) -> &K {
+        &self.key
+    }
+
+    /// Consume the snapshot, returning only the value.
+    pub fn into_inner(self) -> T {
+        self.value
+    }
+
+    /// Consume the snapshot into `(key, value)`.
+    pub fn into_parts(self) -> (K, T) {
+        (self.key, self.value)
+    }
+
+    /// Replace the local value, keeping the key.
+    pub fn replace(self, value: T) -> Self {
+        Self {
+            key: self.key,
+            value,
+        }
+    }
+
+    /// Transform the local value, keeping the key.
+    pub fn map(self, f: impl FnOnce(T) -> T) -> Self {
+        Self {
+            key: self.key,
+            value: f(self.value),
+        }
+    }
+
+    /// Upsert effect with a new value (same key).
+    pub fn put(self, value: T) -> Put<T, K> {
+        Put::named(self.key, value)
+    }
+
+    /// Upsert effect writing back the current value.
+    pub fn into_put(self) -> Put<T, K> {
+        Put::named(self.key, self.value)
+    }
+
+    /// Remove effect for this key.
+    pub fn remove(self) -> Remove<T, K> {
+        Remove::named(self.key)
+    }
+}
+
+impl<T> GetOrDefault<T, ()> {
+    /// Snapshot for a singleton (unit-keyed) entity.
+    pub fn new(value: T) -> Self {
+        Self::named((), value)
+    }
+}
+
+impl<T, K> Deref for GetOrDefault<T, K> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        &self.value
+    }
+}
+
+impl<T, K> DerefMut for GetOrDefault<T, K> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.value
+    }
+}
+
+impl<T, K> AsRef<T> for GetOrDefault<T, K> {
+    fn as_ref(&self) -> &T {
+        &self.value
+    }
+}
+
+impl<T, K> AsMut<T> for GetOrDefault<T, K> {
+    fn as_mut(&mut self) -> &mut T {
+        &mut self.value
+    }
+}
+
+impl<T, K> From<(K, T)> for GetOrDefault<T, K> {
+    fn from((key, value): (K, T)) -> Self {
+        Self::named(key, value)
+    }
+}
+
+impl<T> From<T> for GetOrDefault<T, ()> {
+    fn from(value: T) -> Self {
+        Self::new(value)
+    }
+}
+
+impl<'s, C, T, K> FromStep<'s, C> for GetOrDefault<T, K>
+where
+    T: Clone + Default + Send + Sync + 'static,
+    K: EntityKey,
+{
+    type Rejection = EntityRejection;
+
+    fn from_step(ctx: &mut StepContext<'s, C>) -> Result<Self, Self::Rejection> {
+        let key = K::extract_key(ctx)?;
+        let value = match ctx.entities().get_cloned::<T, K>(&key) {
+            Ok(value) => value,
+            Err(EntityRejection::Missing) => T::default(),
+            Err(err) => return Err(err),
+        };
+        Ok(GetOrDefault { key, value })
+    }
+}
+
 /// Shared lease on an entity.
 pub struct GetRef<T, K = ()> {
     key: K,
@@ -818,5 +945,37 @@ mod tests {
         let mut ctx = StepContext::new(world, &mut bag, EmptyCaptures, None);
         let got = Get::<u8, ()>::from_step(&mut ctx).unwrap();
         assert_eq!(*got, 9);
+    }
+
+    #[test]
+    fn get_or_default_uses_default_when_missing() {
+        let mut bag = EntityBag::new();
+        let world = Locked::new(());
+        let mut ctx = StepContext::new(world, &mut bag, EmptyCaptures, None);
+        let got = GetOrDefault::<u32, ()>::from_step(&mut ctx).unwrap();
+        assert_eq!(*got, 0);
+    }
+
+    #[test]
+    fn get_or_default_clones_existing() {
+        let mut bag = EntityBag::new();
+        bag.insert((), 9u32).unwrap();
+        let world = Locked::new(());
+        let mut ctx = StepContext::new(world, &mut bag, EmptyCaptures, None);
+        let got = GetOrDefault::<u32, ()>::from_step(&mut ctx).unwrap();
+        assert_eq!(*got, 9);
+    }
+
+    #[test]
+    fn get_or_default_propagates_locked() {
+        let mut bag = EntityBag::new();
+        bag.insert((), 1u32).unwrap();
+        let _lease = bag.get_mut::<u32, ()>(()).unwrap();
+        let world = Locked::new(());
+        let mut ctx = StepContext::new(world, &mut bag, EmptyCaptures, None);
+        assert!(matches!(
+            GetOrDefault::<u32, ()>::from_step(&mut ctx),
+            Err(EntityRejection::Locked)
+        ));
     }
 }

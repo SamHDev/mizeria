@@ -19,7 +19,7 @@ Built-in extractors:
 | `CtxRef<W>` | Shared lease on the scenario world |
 | `DocString` | Step doc string argument |
 | `DataTable` | Step data table argument |
-| Entity getters (`Get`, `NamedMut`, …) | Entity bag (+ key capture) — [Entities](entities.md) |
+| Entity getters (`Get`, `GetOrDefault`, `NamedMut`, …) | Entity bag (+ key capture) — [Entities](entities.md) |
 
 > **Registration note:** suite `given` / `when` / `then` require owned (`'static`)
 > extractors today. Prefer `String` / `Param<T>` / `CtxMut` at registration time.

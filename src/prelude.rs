@@ -5,8 +5,8 @@
 //! ```
 
 pub use crate::entity::{
-    Effect, EntityBag, EntityKey, EntityRejection, Get, GetMut, GetRef, Insert, InsertNamed, Named,
-    NamedMut, NamedRef, Put, PutNamed, Remove, RemoveNamed,
+    Effect, EntityBag, EntityKey, EntityRejection, Get, GetMut, GetOrDefault, GetRef, Insert,
+    InsertNamed, Named, NamedMut, NamedOrDefault, NamedRef, Put, PutNamed, Remove, RemoveNamed,
 };
 pub use crate::extract::{
     Ctx, CtxMut, CtxRef, DataTable, DocString, FromCapture, FromRow, FromStep, Param, StepArgument,

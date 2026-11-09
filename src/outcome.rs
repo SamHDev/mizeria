@@ -33,4 +33,16 @@ impl Outcome {
     pub fn total(self) -> usize {
         self.passed + self.failed + self.skipped + self.undefined
     }
+
+    pub fn exit_code(self) -> i32 {
+        if self.is_ok() {
+            1
+        } else {
+            0
+        }
+    }
+
+    pub fn exit(&self) -> ! {
+        std::process::exit(self.exit_code())
+    }
 }

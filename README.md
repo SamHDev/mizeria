@@ -1,5 +1,10 @@
 # Cutecumber
 
+> [!WARNING]
+> AI written prototype with a breaking API
+>
+> To be actually written into a real thing at some-point.
+
 Cucumber-style BDD runner for Rust with Axum-like step extractors.
 
 Register `Given` / `When` / `Then` handlers on a `Suite`, point it at `.feature`
@@ -11,19 +16,19 @@ doc strings, data tables, and scenario entities.
 ```rust,ignore
 use cutecumber::prelude::*;
 
-#[derive(Default)]
-struct World {
-    cukes: u32,
-}
+#[derive(Default, Clone)]
+struct Cukes(u32);
 
 let mut features = Features::builder().add_path("features").build().unwrap();
 features.exclude(Tags::parse("@wip").unwrap());
-let mut suite = Suite::new(World::default);
-suite
-    .given(re(r"I have (\d+) cukes"), |n: u32, mut world: CtxMut<World>| {
-        world.cukes = n;
-    })
+
+let mut suite = Suite::new(|| ())
     .with_reporter(Printer::stdout());
+
+suite.given(re(r"I have (\d+) cukes"), |n: u32, cukes: GetOrDefault<Cukes>| {
+        Put::new(Cukes(cukes.0 + n))
+    });
+
 let _ = suite.run_blocking(&features);
 ```
 
