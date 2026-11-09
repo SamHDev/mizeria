@@ -4,11 +4,15 @@ version = "0.1.0"
 edition = "2024"
 
 [features]
-default = ["dialects"]
+default = ["dialects", "colour"]
 # Embed the full official Gherkin dialect catalog. Without this feature only English is available.
 dialects = []
+# ANSI-coloured completion printer (`ColourSyncPrinter` / default `Printer`).
+colour = ["dep:console"]
 
 [dependencies]
+console = { version = "0.16", optional = true }
+pollster = "0.4"
 regex = "1.13.1"
 
 [dev-dependencies]

@@ -11,6 +11,62 @@ pub trait Captures<'s>: Send {
     fn named(&self, name: &str) -> Option<&'s str>;
 }
 
+/// Owned capture groups so handlers can run after the match borrow ends.
+#[derive(Debug, Clone, Default)]
+pub struct CaptureBag {
+    groups: Vec<String>,
+    names: HashMap<String, String>,
+}
+
+impl CaptureBag {
+    pub fn empty() -> Self {
+        Self::default()
+    }
+
+    pub fn from_captures<'s>(mut caps: impl Captures<'s>) -> Self {
+        let mut groups = Vec::new();
+        while let Some(value) = caps.next() {
+            groups.push(value.to_owned());
+        }
+        Self {
+            groups,
+            names: HashMap::new(),
+        }
+    }
+
+    pub fn groups(&self) -> &[String] {
+        &self.groups
+    }
+
+    pub fn view(&self) -> CaptureBagView<'_> {
+        CaptureBagView {
+            groups: &self.groups,
+            names: &self.names,
+            cursor: 0,
+        }
+    }
+}
+
+/// [`Captures`] view over a [`CaptureBag`].
+#[derive(Debug, Clone)]
+pub struct CaptureBagView<'s> {
+    groups: &'s [String],
+    names: &'s HashMap<String, String>,
+    cursor: usize,
+}
+
+impl<'s> Captures<'s> for CaptureBagView<'s> {
+    fn next(&mut self) -> Option<&'s str> {
+        let value = self.groups.get(self.cursor)?;
+        self.cursor += 1;
+        Some(value.as_str())
+    }
+
+    fn named(&self, name: &str) -> Option<&'s str> {
+        self.names.get(name).map(String::as_str)
+    }
+}
+
 /// Always-empty captures; used by [`Const`] matches.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct EmptyCaptures;
@@ -165,6 +221,20 @@ impl Statement for Regex {
             names,
             cursor: 0,
         })
+    }
+}
+
+impl CaptureBag {
+    /// Preserve positional and named groups from a regex match.
+    pub fn from_regex(caps: &RegexCaptures<'_>) -> Self {
+        Self {
+            groups: caps.groups.iter().map(|s| (*s).to_owned()).collect(),
+            names: caps
+                .names
+                .iter()
+                .map(|(k, v)| (k.clone(), (*v).to_owned()))
+                .collect(),
+        }
     }
 }
 

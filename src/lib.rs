@@ -3,6 +3,7 @@ pub mod extract;
 pub mod features;
 pub mod handler;
 pub mod listener;
+pub mod loader;
 pub mod outcome;
 pub mod response;
 pub mod statement;
@@ -15,14 +16,19 @@ pub use extract::{
 pub use features::{Features, FeaturesBuilder};
 pub use handler::{call, Call, Handler, IntoStepFuture};
 pub use listener::{
-    FeatureEvent, Listener, Printer, RuleEvent, ScenarioEvent, StepEvent, StepResult,
+    ASCIISyncPrinter, FeatureEvent, Listener, Printer, RuleEvent, ScenarioEvent, StepEvent,
+    StepResult,
 };
+#[cfg(feature = "colour")]
+pub use listener::{Colour, ColourSyncPrinter};
+pub use loader::{load_features, FeatureSource, LoadError};
 pub use outcome::Outcome;
 pub use response::{
     ArgumentRejection, CtxRejection, IntoStepResult, ParamRejection, RowRejection, StepError,
     StepOutcome,
 };
 pub use statement::{
-    Captures, Const, EmptyCaptures, Regex, RegexCaptures, SliceCaptures, Statement,
+    CaptureBag, CaptureBagView, Captures, Const, EmptyCaptures, Regex, RegexCaptures,
+    SliceCaptures, Statement,
 };
 pub use suite::{StepKeyword, Suite};

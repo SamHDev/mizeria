@@ -1,7 +1,17 @@
 //! Lifecycle hooks for observing a suite run.
 //!
 //! [`Listener`] is intentionally general-purpose (printing, metrics, CI adapters).
-//! [`Printer`] is the built-in stdout implementation.
+//! [`ASCIISyncPrinter`] is the plain completion reporter; with the `colour` feature
+//! (on by default), [`ColourSyncPrinter`] adds ANSI styling and becomes [`Printer`].
+
+mod ascii;
+mod buffer;
+#[cfg(feature = "colour")]
+mod colour;
+
+pub use ascii::ASCIISyncPrinter;
+#[cfg(feature = "colour")]
+pub use colour::{Colour, ColourSyncPrinter};
 
 use crate::ast::Location;
 use crate::outcome::Outcome;
@@ -71,18 +81,10 @@ pub trait Listener: Send {
     fn on_step_finished(&mut self, _event: &StepEvent<'_>, _result: &StepResult) {}
 }
 
-/// Human-readable progress writer targeting standard output.
-#[derive(Debug, Default)]
-pub struct Printer {
-    _private: (),
-}
+/// Stdout-backed completion printer (coloured when the `colour` feature is enabled).
+#[cfg(feature = "colour")]
+pub type Printer = ColourSyncPrinter<std::io::Stdout>;
 
-impl Printer {
-    pub fn stdout() -> Self {
-        Self { _private: () }
-    }
-}
-
-impl Listener for Printer {
-    // Formatting lands with the execution slice; hooks remain no-op for now.
-}
+/// Stdout-backed ASCII completion printer.
+#[cfg(not(feature = "colour"))]
+pub type Printer = ASCIISyncPrinter<std::io::Stdout>;
