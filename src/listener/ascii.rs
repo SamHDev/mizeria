@@ -90,7 +90,7 @@ impl<W: Write + Send> Listener for ASCIISyncPrinter<W> {
     }
 
     fn on_step_finished(&mut self, event: &StepEvent<'_>, result: &StepResult) {
-        self.buffer.on_step_finished(event, result);
+        self.buffer.on_step_finished(event, result, 0);
     }
 
     fn on_run_finished(&mut self, outcome: &Outcome) {

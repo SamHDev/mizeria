@@ -1,4 +1,4 @@
-//! Discover and read `.feature` sources from [`Features`](crate::Features) paths.
+//! Discover and read `.feature` sources from [`Features`] paths.
 
 use std::fs;
 use std::io;
@@ -9,16 +9,32 @@ use crate::features::Features;
 /// One feature file on disk, ready to parse.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FeatureSource {
+    /// Path or URI shown to listeners (usually the filesystem path).
     pub uri: String,
+    /// Raw Gherkin source text.
     pub source: String,
 }
 
 /// Errors while discovering or reading feature files.
 #[derive(Debug)]
 pub enum LoadError {
-    Io { path: PathBuf, source: io::Error },
-    NotFound { path: PathBuf },
-    NotFeature { path: PathBuf },
+    /// Filesystem I/O failed while reading `path`.
+    Io {
+        /// Path that caused the error.
+        path: PathBuf,
+        /// Underlying I/O error.
+        source: io::Error,
+    },
+    /// Configured path does not exist.
+    NotFound {
+        /// Missing path.
+        path: PathBuf,
+    },
+    /// Path exists but is neither a `.feature` file nor a directory.
+    NotFeature {
+        /// Rejected path.
+        path: PathBuf,
+    },
 }
 
 impl std::fmt::Display for LoadError {
@@ -47,6 +63,9 @@ impl std::error::Error for LoadError {
 }
 
 /// Collect feature file contents for a suite run.
+///
+/// Directories are walked according to [`Features::recursive`]. Paths are sorted
+/// and deduplicated before reading.
 pub fn load_features(features: &Features) -> Result<Vec<FeatureSource>, LoadError> {
     let mut paths = Vec::new();
     for root in features.paths() {

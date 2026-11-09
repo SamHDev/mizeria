@@ -1,17 +1,37 @@
 //! Owned read/write leases over an [`Arc`] so extractors can be `'static`.
 
 use std::cell::UnsafeCell;
+use std::fmt;
 use std::ops::{Deref, DerefMut};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
 /// Shared state with a reader-writer lease (try-lock, no poisoning).
 ///
+/// Lock state encoding:
 /// - `0` — unlocked
 /// - `1..EXCLUSIVE` — reader count
 /// - `EXCLUSIVE` — one writer
 const EXCLUSIVE: usize = usize::MAX;
 
+/// Failure to acquire a [`Locked`] lease because another guard is held.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct LockError;
+
+impl fmt::Display for LockError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("value is locked")
+    }
+}
+
+impl std::error::Error for LockError {}
+
+/// Cloneable handle to a value protected by try-lock read/write leases.
+///
+/// Cloning shares the same underlying value (via [`Arc`]). Extractors such as
+/// [`crate::extract::CtxMut`] hold [`ReadGuard`] / [`WriteGuard`] leases for the duration
+/// of a step so the world and entities can be `'static` from the handler’s point
+/// of view.
 pub struct Locked<T: ?Sized> {
     inner: Arc<Inner<T>>,
 }
@@ -26,6 +46,7 @@ unsafe impl<T: ?Sized + Send> Send for Inner<T> {}
 unsafe impl<T: ?Sized + Send + Sync> Sync for Inner<T> {}
 
 impl<T> Locked<T> {
+    /// Wrap `value` in a new shared lock cell.
     pub fn new(value: T) -> Self {
         Self {
             inner: Arc::new(Inner {
@@ -35,11 +56,15 @@ impl<T> Locked<T> {
         }
     }
 
-    pub fn try_read(&self) -> Result<ReadGuard<T>, ()> {
+    /// Try to take a shared read lease.
+    ///
+    /// Fails with [`LockError`] if a writer holds the lock or the reader count
+    /// would overflow.
+    pub fn try_read(&self) -> Result<ReadGuard<T>, LockError> {
         loop {
             let state = self.inner.state.load(Ordering::Acquire);
             if state == EXCLUSIVE || state == EXCLUSIVE - 1 {
-                return Err(());
+                return Err(LockError);
             }
             match self.inner.state.compare_exchange_weak(
                 state,
@@ -57,7 +82,10 @@ impl<T> Locked<T> {
         }
     }
 
-    pub fn try_write(&self) -> Result<WriteGuard<T>, ()> {
+    /// Try to take an exclusive write lease.
+    ///
+    /// Fails with [`LockError`] if any readers or a writer already hold the lock.
+    pub fn try_write(&self) -> Result<WriteGuard<T>, LockError> {
         match self
             .inner
             .state
@@ -66,12 +94,12 @@ impl<T> Locked<T> {
             Ok(_) => Ok(WriteGuard {
                 inner: Arc::clone(&self.inner),
             }),
-            Err(_) => Err(()),
+            Err(_) => Err(LockError),
         }
     }
 
     /// Short read to clone out a value without holding a long lease.
-    pub fn get_cloned(&self) -> Result<T, ()>
+    pub fn get_cloned(&self) -> Result<T, LockError>
     where
         T: Clone,
     {
@@ -80,12 +108,13 @@ impl<T> Locked<T> {
     }
 
     /// Replace the value. Requires exclusive access (no outstanding leases).
-    pub fn replace(&self, value: T) -> Result<T, ()> {
+    pub fn replace(&self, value: T) -> Result<T, LockError> {
         let mut guard = self.try_write()?;
         Ok(std::mem::replace(&mut *guard, value))
     }
 
-    pub fn with_mut<R>(&self, f: impl FnOnce(&mut T) -> R) -> Result<R, ()> {
+    /// Run `f` with exclusive mutable access, releasing the lease afterwards.
+    pub fn with_mut<R>(&self, f: impl FnOnce(&mut T) -> R) -> Result<R, LockError> {
         let mut guard = self.try_write()?;
         Ok(f(&mut *guard))
     }
@@ -99,6 +128,9 @@ impl<T: ?Sized> Clone for Locked<T> {
     }
 }
 
+/// Shared (read) lease over a [`Locked`] value.
+///
+/// Dropping the guard releases one reader count.
 pub struct ReadGuard<T: ?Sized> {
     inner: Arc<Inner<T>>,
 }
@@ -122,6 +154,9 @@ impl<T: ?Sized> Drop for ReadGuard<T> {
     }
 }
 
+/// Exclusive (write) lease over a [`Locked`] value.
+///
+/// Dropping the guard unlocks the cell.
 pub struct WriteGuard<T: ?Sized> {
     inner: Arc<Inner<T>>,
 }

@@ -9,7 +9,9 @@ use crate::entity::EntityBag;
 /// Result of running a step handler.
 #[derive(Debug)]
 pub enum StepOutcome {
+    /// Handler completed successfully (entity effects applied).
     Ok,
+    /// Handler or extractor reported a failure.
     Failed(StepError),
 }
 
@@ -20,12 +22,14 @@ pub struct StepError {
 }
 
 impl StepError {
+    /// Create an error from a displayable message.
     pub fn new(message: impl Into<Cow<'static, str>>) -> Self {
         Self {
             message: message.into(),
         }
     }
 
+    /// Human-readable failure text.
     pub fn message(&self) -> &str {
         &self.message
     }
@@ -47,6 +51,7 @@ impl From<Infallible> for StepError {
 
 /// Convert a handler return value into a [`StepOutcome`], applying entity effects.
 pub trait IntoStepResult {
+    /// Apply any [`crate::entity::Effect`]s and produce a step outcome.
     fn into_step_result(self, entities: &mut EntityBag) -> StepOutcome;
 }
 
@@ -84,7 +89,9 @@ where
 /// World was missing, already taken, or locked by another extractor.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CtxRejection {
+    /// No world handle was available (unused today; reserved for optional worlds).
     Missing,
+    /// Another extractor still holds a conflicting world lease.
     Locked,
 }
 
@@ -108,10 +115,15 @@ impl From<CtxRejection> for StepError {
 /// Failure to extract a capture-group parameter.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ParamRejection {
+    /// No unused capture remained.
     Missing,
+    /// The capture string could not be parsed as the requested type.
     Parse {
+        /// Raw capture text.
         value: String,
+        /// `std::any::type_name` of the target type.
         type_name: &'static str,
+        /// Display of the [`FromStr`](std::str::FromStr) error.
         message: String,
     },
 }
@@ -143,9 +155,15 @@ impl From<ParamRejection> for StepError {
 /// Failure to extract a step argument (doc string / data table).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ArgumentRejection {
+    /// The step had no attached argument.
     Missing,
+    /// Another extractor already consumed the argument.
     AlreadyTaken,
-    WrongKind { expected: &'static str },
+    /// The argument existed but was the other kind (doc string vs data table).
+    WrongKind {
+        /// Expected kind label (`"doc string"` or `"data table"`).
+        expected: &'static str,
+    },
 }
 
 impl fmt::Display for ArgumentRejection {
@@ -172,15 +190,23 @@ impl From<ArgumentRejection> for StepError {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RowRejection {
     /// Row had the wrong number of cells.
-    Arity { expected: usize, got: usize },
+    Arity {
+        /// Number of fields the target type expects.
+        expected: usize,
+        /// Number of cells present in the row.
+        got: usize,
+    },
     /// A single cell failed to parse.
     Cell {
+        /// Zero-based column index.
         column: usize,
+        /// Underlying parameter parse failure.
         source: ParamRejection,
     },
 }
 
 impl RowRejection {
+    /// Convenience constructor for a cell parse failure.
     pub fn cell(column: usize, source: ParamRejection) -> Self {
         Self::Cell { column, source }
     }

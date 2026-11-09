@@ -1,8 +1,8 @@
-//! Feature discovery configuration (paths only; loading comes later).
+//! Feature discovery configuration for a suite run.
 
 use std::path::PathBuf;
 
-/// Configured set of feature paths ready to be loaded by a suite run.
+/// Configured set of feature paths ready to be loaded by [`crate::loader::load_features`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Features {
     paths: Vec<PathBuf>,
@@ -11,7 +11,7 @@ pub struct Features {
 
 impl Features {
     /// Start a builder for feature path configuration.
-    pub fn new() -> FeaturesBuilder {
+    pub fn builder() -> FeaturesBuilder {
         FeaturesBuilder::new()
     }
 
@@ -40,6 +40,7 @@ pub struct FeaturesBuilder {
 }
 
 impl FeaturesBuilder {
+    /// Empty path list with recursive directory walking enabled.
     pub fn new() -> Self {
         Self {
             paths: Vec::new(),

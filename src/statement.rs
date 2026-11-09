@@ -9,6 +9,12 @@ pub trait Captures<'s>: Send {
 
     /// Named capture by group name (does not advance the cursor).
     fn named(&self, name: &str) -> Option<&'s str>;
+
+    /// Invoke `f` for each named capture `(name, value)`.
+    ///
+    /// Default: no named groups. [`RegexCaptures`] overrides this so
+    /// [`CaptureBag::from_captures`] can preserve names.
+    fn for_each_named(&self, _f: &mut dyn FnMut(&str, &'s str)) {}
 }
 
 /// Owned capture groups so handlers can run after the match borrow ends.
@@ -19,25 +25,47 @@ pub struct CaptureBag {
 }
 
 impl CaptureBag {
+    /// Empty bag with no positional or named groups.
     pub fn empty() -> Self {
         Self::default()
     }
 
+    /// Copy remaining positional groups (and any named groups) into an owned bag.
     pub fn from_captures<'s>(mut caps: impl Captures<'s>) -> Self {
+        let mut names = HashMap::new();
+        caps.for_each_named(&mut |name, value| {
+            names.insert(name.to_owned(), value.to_owned());
+        });
         let mut groups = Vec::new();
         while let Some(value) = caps.next() {
             groups.push(value.to_owned());
         }
+        Self { groups, names }
+    }
+
+    /// Preserve positional and named groups from a regex match without advancing it.
+    pub fn from_regex(caps: &RegexCaptures<'_>) -> Self {
         Self {
-            groups,
-            names: HashMap::new(),
+            groups: caps.groups.iter().map(|s| (*s).to_owned()).collect(),
+            names: caps
+                .names
+                .iter()
+                .map(|(k, v)| (k.clone(), (*v).to_owned()))
+                .collect(),
         }
     }
 
+    /// Positional capture strings, in match order.
     pub fn groups(&self) -> &[String] {
         &self.groups
     }
 
+    /// Named capture map (`(?P<name>…)` groups).
+    pub fn names(&self) -> &HashMap<String, String> {
+        &self.names
+    }
+
+    /// Borrowing [`Captures`] view with a fresh positional cursor.
     pub fn view(&self) -> CaptureBagView<'_> {
         CaptureBagView {
             groups: &self.groups,
@@ -65,6 +93,12 @@ impl<'s> Captures<'s> for CaptureBagView<'s> {
     fn named(&self, name: &str) -> Option<&'s str> {
         self.names.get(name).map(String::as_str)
     }
+
+    fn for_each_named(&self, f: &mut dyn FnMut(&str, &'s str)) {
+        for (name, value) in self.names {
+            f(name.as_str(), value.as_str());
+        }
+    }
 }
 
 /// Always-empty captures; used by [`Const`] matches.
@@ -89,6 +123,7 @@ pub struct SliceCaptures<'s> {
 }
 
 impl<'s> SliceCaptures<'s> {
+    /// Start at the first element of `groups`.
     pub fn new(groups: &'s [&'s str]) -> Self {
         Self { groups, cursor: 0 }
     }
@@ -124,14 +159,22 @@ impl<'s> Captures<'s> for RegexCaptures<'s> {
     fn named(&self, name: &str) -> Option<&'s str> {
         self.names.get(name).copied()
     }
+
+    fn for_each_named(&self, f: &mut dyn FnMut(&str, &'s str)) {
+        for (name, value) in &self.names {
+            f(name.as_str(), value);
+        }
+    }
 }
 
-/// Matches step text and yields captures for [`crate::StepContext`].
+/// Matches step text and yields captures for [`crate::extract::StepContext`].
 pub trait Statement: Send + Sync {
+    /// Capture view borrowed from the matched step text.
     type Captures<'s>: Captures<'s>
     where
         Self: 's;
 
+    /// Return captures when `step` fully matches this statement.
     fn matches<'s>(&self, step: &'s str) -> Option<Self::Captures<'s>>;
 }
 
@@ -142,6 +185,7 @@ pub struct Const {
 }
 
 impl Const {
+    /// Match steps whose text equals `text` exactly.
     pub const fn new(text: &'static str) -> Self {
         Self { text }
     }
@@ -159,7 +203,7 @@ impl Statement for &'static str {
     where
         Self: 's;
 
-    fn matches<'s>(&self, step: &'s str) -> Option<EmptyCaptures> {
+    fn matches(&self, step: &str) -> Option<EmptyCaptures> {
         Const::new(self).matches(step)
     }
 }
@@ -170,7 +214,7 @@ impl Statement for Const {
     where
         Self: 's;
 
-    fn matches<'s>(&self, step: &'s str) -> Option<EmptyCaptures> {
+    fn matches(&self, step: &str) -> Option<EmptyCaptures> {
         (self.text == step).then_some(EmptyCaptures)
     }
 }
@@ -182,6 +226,7 @@ pub struct Regex {
 }
 
 impl Regex {
+    /// Compile `pattern` as a step regex.
     pub fn new(pattern: &str) -> Result<Self, regex::Error> {
         Ok(Self {
             inner: regex::Regex::new(pattern)?,
@@ -235,20 +280,6 @@ impl Statement for Regex {
     }
 }
 
-impl CaptureBag {
-    /// Preserve positional and named groups from a regex match.
-    pub fn from_regex(caps: &RegexCaptures<'_>) -> Self {
-        Self {
-            groups: caps.groups.iter().map(|s| (*s).to_owned()).collect(),
-            names: caps
-                .names
-                .iter()
-                .map(|(k, v)| (k.clone(), (*v).to_owned()))
-                .collect(),
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -276,6 +307,15 @@ mod tests {
         let caps = stmt.matches("I have 7 cukes").unwrap();
         assert_eq!(caps.named("count"), Some("7"));
         assert!(caps.named("missing").is_none());
+    }
+
+    #[test]
+    fn capture_bag_preserves_named_groups() {
+        let stmt = Regex::new(r"I have (?P<count>\d+) cukes").unwrap();
+        let caps = stmt.matches("I have 7 cukes").unwrap();
+        let bag = CaptureBag::from_captures(caps);
+        assert_eq!(bag.names().get("count").map(String::as_str), Some("7"));
+        assert_eq!(bag.view().named("count"), Some("7"));
     }
 
     #[test]

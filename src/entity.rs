@@ -19,6 +19,7 @@ pub struct EntityBag {
 }
 
 impl EntityBag {
+    /// Create an empty entity bag.
     pub fn new() -> Self {
         Self::default()
     }
@@ -47,6 +48,20 @@ impl EntityBag {
             .and_then(|m| m.downcast_ref::<HashMap<K, Locked<Box<dyn Any + Send + Sync>>>>())
     }
 
+    fn keyed_map_mut<T, K>(&mut self) -> Option<&mut HashMap<K, Locked<Box<dyn Any + Send + Sync>>>>
+    where
+        T: 'static,
+        K: EntityKey,
+    {
+        let id = (TypeId::of::<T>(), TypeId::of::<K>());
+        self.maps
+            .get_mut(&id)
+            .map(|m| {
+                m.downcast_mut::<HashMap<K, Locked<Box<dyn Any + Send + Sync>>>>()
+                    .expect("entity map type mismatch")
+            })
+    }
+
     fn slot<T, K>(&self, key: &K) -> Option<&Locked<Box<dyn Any + Send + Sync>>>
     where
         T: 'static,
@@ -55,6 +70,7 @@ impl EntityBag {
         self.keyed_map_ref::<T, K>()?.get(key)
     }
 
+    /// Clone the entity at `key`, without holding a lease.
     pub fn get_cloned<T, K>(&self, key: &K) -> Result<T, EntityRejection>
     where
         T: Clone + Send + Sync + 'static,
@@ -68,6 +84,7 @@ impl EntityBag {
             .ok_or(EntityRejection::Missing)
     }
 
+    /// Shared lease on the entity at `key`.
     pub fn get_ref<T, K>(&self, key: K) -> Result<GetRef<T, K>, EntityRejection>
     where
         T: Send + Sync + 'static,
@@ -82,6 +99,7 @@ impl EntityBag {
         })
     }
 
+    /// Exclusive lease on the entity at `key`.
     pub fn get_mut<T, K>(&self, key: K) -> Result<GetMut<T, K>, EntityRejection>
     where
         T: Send + Sync + 'static,
@@ -96,6 +114,7 @@ impl EntityBag {
         })
     }
 
+    /// Insert or replace the entity at `key`.
     pub fn put<T, K>(&mut self, key: K, value: T) -> Result<(), EntityRejection>
     where
         T: Send + Sync + 'static,
@@ -114,6 +133,7 @@ impl EntityBag {
         Ok(())
     }
 
+    /// Insert a new entity; fails if `key` is already occupied.
     pub fn insert<T, K>(&mut self, key: K, value: T) -> Result<(), EntityRejection>
     where
         T: Send + Sync + 'static,
@@ -128,19 +148,19 @@ impl EntityBag {
         Ok(())
     }
 
+    /// Remove the entity at `key`.
+    ///
+    /// Missing keys succeed (idempotent). Returns [`EntityRejection::Locked`] if
+    /// another extractor still holds a lease on the slot.
     pub fn remove<T, K>(&mut self, key: &K) -> Result<(), EntityRejection>
     where
         T: Send + Sync + 'static,
         K: EntityKey,
     {
-        if let Some(map) = self.keyed_map_ref::<T, K>() {
-            // Need mut — re-get mutably
-            let _ = map;
-        }
-        let map = self.keyed_map::<T, K>();
-        // Only remove if unlocked: try exclusive via replace path
+        let Some(map) = self.keyed_map_mut::<T, K>() else {
+            return Ok(());
+        };
         if let Some(slot) = map.get(key) {
-            // Ensure no readers/writers
             let _guard = slot.try_write().map_err(|_| EntityRejection::Locked)?;
             drop(_guard);
         }
@@ -151,6 +171,7 @@ impl EntityBag {
 
 /// Keys that can be stored and extracted from a step capture stream.
 pub trait EntityKey: Clone + Eq + Hash + Send + Sync + 'static {
+    /// Pull this key from the step context (usually the next capture group).
     fn extract_key<'s, C>(ctx: &mut StepContext<'s, C>) -> Result<Self, EntityRejection>;
 }
 
@@ -173,10 +194,15 @@ where
 /// Failure to extract or apply an entity operation.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum EntityRejection {
+    /// No entity exists at the requested key.
     Missing,
+    /// A key capture was required but none remained.
     MissingKey,
+    /// Another extractor still holds a lease on the slot.
     Locked,
+    /// [`Insert`] refused because the key was already occupied.
     AlreadyExists,
+    /// Failed to parse the key from a capture group.
     Parse(ParamRejection),
 }
 
@@ -215,6 +241,7 @@ impl From<EntityRejection> for StepError {
 
 /// Apply mutations to the entity bag after a successful step body.
 pub trait Effect {
+    /// Commit this effect into `entities`.
     fn apply(self, entities: &mut EntityBag) -> Result<(), EntityRejection>;
 }
 
@@ -264,18 +291,22 @@ pub struct Get<T, K = ()> {
 pub type Named<T> = Get<T, String>;
 
 impl<T, K> Get<T, K> {
+    /// Build a snapshot with an explicit key.
     pub fn named(key: K, value: T) -> Self {
         Self { key, value }
     }
 
+    /// Borrow the storage key.
     pub fn key(&self) -> &K {
         &self.key
     }
 
+    /// Consume the snapshot, returning only the value.
     pub fn into_inner(self) -> T {
         self.value
     }
 
+    /// Consume the snapshot into `(key, value)`.
     pub fn into_parts(self) -> (K, T) {
         (self.key, self.value)
     }
@@ -288,6 +319,7 @@ impl<T, K> Get<T, K> {
         }
     }
 
+    /// Transform the local value, keeping the key.
     pub fn map(self, f: impl FnOnce(T) -> T) -> Self {
         Self {
             key: self.key,
@@ -305,12 +337,14 @@ impl<T, K> Get<T, K> {
         Put::named(self.key, self.value)
     }
 
+    /// Remove effect for this key.
     pub fn remove(self) -> Remove<T, K> {
         Remove::named(self.key)
     }
 }
 
 impl<T> Get<T, ()> {
+    /// Snapshot for a singleton (unit-keyed) entity.
     pub fn new(value: T) -> Self {
         Self::named((), value)
     }
@@ -379,6 +413,7 @@ pub struct GetRef<T, K = ()> {
 pub type NamedRef<T> = GetRef<T, String>;
 
 impl<T, K> GetRef<T, K> {
+    /// Borrow the storage key.
     pub fn key(&self) -> &K {
         &self.key
     }
@@ -421,10 +456,12 @@ pub struct GetMut<T, K = ()> {
 pub type NamedMut<T> = GetMut<T, String>;
 
 impl<T, K> GetMut<T, K> {
+    /// Borrow the storage key.
     pub fn key(&self) -> &K {
         &self.key
     }
 
+    /// Convert this exclusive lease into a remove effect for the same key.
     pub fn remove(self) -> Remove<T, K> {
         Remove::named(self.key)
     }
@@ -477,18 +514,22 @@ pub struct Put<T, K = ()> {
 pub type PutNamed<T> = Put<T, String>;
 
 impl<T, K> Put<T, K> {
+    /// Upsert `value` under an explicit key.
     pub fn named(key: K, value: T) -> Self {
         Self { key, value }
     }
 
+    /// Borrow the storage key.
     pub fn key(&self) -> &K {
         &self.key
     }
 
+    /// Consume the effect, returning only the value.
     pub fn into_inner(self) -> T {
         self.value
     }
 
+    /// Replace the value to write, keeping the key.
     pub fn replace(self, value: T) -> Self {
         Self {
             key: self.key,
@@ -496,6 +537,7 @@ impl<T, K> Put<T, K> {
         }
     }
 
+    /// Transform the value to write, keeping the key.
     pub fn map(self, f: impl FnOnce(T) -> T) -> Self {
         Self {
             key: self.key,
@@ -505,6 +547,7 @@ impl<T, K> Put<T, K> {
 }
 
 impl<T> Put<T, ()> {
+    /// Upsert a singleton (unit-keyed) entity.
     pub fn new(value: T) -> Self {
         Self::named((), value)
     }
@@ -556,18 +599,22 @@ pub struct Insert<T, K = ()> {
 pub type InsertNamed<T> = Insert<T, String>;
 
 impl<T, K> Insert<T, K> {
+    /// Insert `value` under an explicit key (fails if occupied).
     pub fn named(key: K, value: T) -> Self {
         Self { key, value }
     }
 
+    /// Borrow the storage key.
     pub fn key(&self) -> &K {
         &self.key
     }
 
+    /// Consume the effect, returning only the value.
     pub fn into_inner(self) -> T {
         self.value
     }
 
+    /// Replace the value to insert, keeping the key.
     pub fn replace(self, value: T) -> Self {
         Self {
             key: self.key,
@@ -575,6 +622,7 @@ impl<T, K> Insert<T, K> {
         }
     }
 
+    /// Transform the value to insert, keeping the key.
     pub fn map(self, f: impl FnOnce(T) -> T) -> Self {
         Self {
             key: self.key,
@@ -584,6 +632,7 @@ impl<T, K> Insert<T, K> {
 }
 
 impl<T> Insert<T, ()> {
+    /// Insert a singleton (unit-keyed) entity.
     pub fn new(value: T) -> Self {
         Self::named((), value)
     }
@@ -635,6 +684,7 @@ pub struct Remove<T, K = ()> {
 pub type RemoveNamed<T> = Remove<T, String>;
 
 impl<T, K> Remove<T, K> {
+    /// Remove the entity stored under `key`.
     pub fn named(key: K) -> Self {
         Self {
             key,
@@ -644,8 +694,15 @@ impl<T, K> Remove<T, K> {
 }
 
 impl<T> Remove<T, ()> {
+    /// Remove the singleton (unit-keyed) entity of type `T`.
     pub fn new() -> Self {
         Self::named(())
+    }
+}
+
+impl<T> Default for Remove<T, ()> {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -663,6 +720,13 @@ where
 mod tests {
     use super::*;
     use crate::statement::EmptyCaptures;
+
+    #[test]
+    fn remove_missing_is_ok_without_creating_maps() {
+        let mut bag = EntityBag::new();
+        assert!(bag.remove::<u32, ()>(&()).is_ok());
+        assert!(bag.maps.is_empty());
+    }
 
     #[test]
     fn insert_get_put_remove_roundtrip() {

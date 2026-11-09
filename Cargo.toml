@@ -4,16 +4,26 @@ version = "0.1.0"
 edition = "2024"
 
 [features]
-default = ["dialects", "colour"]
+default = ["dialects", "colour", "prelude"]
 # Embed the full official Gherkin dialect catalog. Without this feature only English is available.
 dialects = []
 # ANSI-coloured completion printer (`ColourSyncPrinter` / default `Printer`).
 colour = ["dep:console"]
+# Re-exports common types via `cutecumber::prelude`.
+prelude = []
+# Legacy Cucumber JSON listener (`listener::JsonReporter`).
+json = ["dep:serde", "dep:serde_json"]
 
 [dependencies]
 console = { version = "0.16", optional = true }
 pollster = "0.4"
 regex = "1.13.1"
+serde = { version = "1", features = ["derive"], optional = true }
+serde_json = { version = "1", optional = true }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["macros", "rt"] }
+
+[[example]]
+name = "withdrawing_cash"
+required-features = ["prelude"]

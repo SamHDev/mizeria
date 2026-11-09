@@ -3,6 +3,7 @@ use super::error::ParseError;
 use super::location::Location;
 use super::token::{Token, TokenItem, TokenKind};
 
+/// Line-oriented Gherkin lexer.
 pub struct Lexer<'s> {
     source: &'s str,
     dialect: &'static Dialect,
@@ -11,6 +12,7 @@ pub struct Lexer<'s> {
 }
 
 impl<'s> Lexer<'s> {
+    /// Create a lexer over `source` using `dialect` keywords.
     pub fn new(source: &'s str, dialect: &'static Dialect) -> Self {
         Self {
             source,
@@ -19,6 +21,7 @@ impl<'s> Lexer<'s> {
         }
     }
 
+    /// Lex the full source into tokens, including a trailing [`TokenKind::Eof`].
     pub fn tokenize(&mut self) -> Result<Vec<Token<'s>>, ParseError> {
         let mut tokens = Vec::new();
         let mut line_no: u32 = 0;
@@ -50,7 +53,7 @@ impl<'s> Lexer<'s> {
     fn lex_line(&mut self, line_no: u32, line: &'s str) -> Result<Token<'s>, ParseError> {
         let indent = leading_whitespace_width(line);
         let trimmed = line[indent..].trim_end_matches(['\r']);
-        let trimmed = trimmed.trim_end_matches(|c: char| c == ' ' || c == '\t');
+        let trimmed = trimmed.trim_end_matches([' ', '\t']);
         let location = Location::new(line_no, (indent + 1) as u32);
 
         if let Some(sep) = self.docstring_sep {
@@ -291,12 +294,9 @@ fn parse_language_header(rest: &str) -> Option<&str> {
 }
 
 fn match_docstring_separator(trimmed: &str) -> Option<&str> {
-    for sep in ["\"\"\"", "```"] {
-        if trimmed.starts_with(sep) {
-            return Some(sep);
-        }
-    }
-    None
+    ["\"\"\"", "```"]
+        .into_iter()
+        .find(|&sep| trimmed.starts_with(sep))
 }
 
 fn is_docstring_separator_line(trimmed: &str, sep: &str) -> bool {

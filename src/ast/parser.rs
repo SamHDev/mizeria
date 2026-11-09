@@ -69,16 +69,14 @@ fn detect_language_header(source: &str) -> Option<&str> {
         if trimmed.is_empty() {
             continue;
         }
-        let Some(rest) = trimmed.strip_prefix('#') else {
-            return None;
-        };
+        let rest = trimmed.strip_prefix('#')?;
         let rest = rest.trim_start();
-        if let Some((key, value)) = rest.split_once(':') {
-            if key.eq_ignore_ascii_case("language") {
-                let value = value.trim();
-                if !value.is_empty() {
-                    return Some(value);
-                }
+        if let Some((key, value)) = rest.split_once(':')
+            && key.eq_ignore_ascii_case("language")
+        {
+            let value = value.trim();
+            if !value.is_empty() {
+                return Some(value);
             }
         }
         // Ordinary comment — keep scanning for a language header at the top.
@@ -491,12 +489,12 @@ impl<'s> Parser<'s> {
             return Ok(Cow::Borrowed(""));
         }
 
-        if contiguous && !saw_comment {
-            if let Some(start) = first_start {
-                // Include newlines between lines in the contiguous slice
-                let slice = &self.source[start..last_end];
-                return Ok(Cow::Borrowed(slice));
-            }
+        if contiguous && !saw_comment
+            && let Some(start) = first_start
+        {
+            // Include newlines between lines in the contiguous slice
+            let slice = &self.source[start..last_end];
+            return Ok(Cow::Borrowed(slice));
         }
 
         Ok(Cow::Owned(parts.join("\n")))

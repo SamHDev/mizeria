@@ -1,9 +1,12 @@
+//! Typed data-table row parsing.
+
 use crate::response::RowRejection;
 
 use super::FromCapture;
 
 /// Parse one data-table row (a slice of cell strings) into a typed value.
 pub trait FromRow<'s>: Sized {
+    /// Parse `cells` left-to-right into `Self` (typically a tuple).
     fn from_row(cells: &'s [&'s str]) -> Result<Self, RowRejection>;
 }
 

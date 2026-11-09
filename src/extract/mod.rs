@@ -23,6 +23,7 @@ use crate::statement::Captures;
 /// Borrowed step argument attached to a Gherkin step.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StepArgument<'s> {
+    /// Triple-quoted docstring body.
     DocString(&'s str),
     /// Row-major table: each inner slice is one row of cell strings.
     DataTable(&'s [&'s [&'s str]]),
@@ -38,6 +39,7 @@ pub struct StepContext<'s, C> {
 }
 
 impl<'s, C> StepContext<'s, C> {
+    /// Build a context for one step invocation.
     pub fn new(
         world: Locked<C>,
         entities: &'s mut EntityBag,
@@ -58,10 +60,12 @@ impl<'s, C> StepContext<'s, C> {
         self.world.clone()
     }
 
+    /// Shared access to the per-scenario entity bag.
     pub fn entities(&self) -> &EntityBag {
         self.entities
     }
 
+    /// Mutable access to the per-scenario entity bag (for applying effects).
     pub fn entities_mut(&mut self) -> &mut EntityBag {
         self.entities
     }
@@ -88,8 +92,10 @@ impl<'s, C> StepContext<'s, C> {
 
 /// Sync extractor from a [`StepContext`], analogous to Axum's `FromRequestParts`.
 pub trait FromStep<'s, C>: Sized {
+    /// Error type converted into [`StepError`] on failure.
     type Rejection;
 
+    /// Pull `Self` from the step context, advancing captures / taking arguments as needed.
     fn from_step(ctx: &mut StepContext<'s, C>) -> Result<Self, Self::Rejection>;
 }
 

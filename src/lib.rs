@@ -1,3 +1,38 @@
+//! Cucumber-style BDD runner with Axum-like step extractors.
+//!
+//! Register [`Given`](Suite::given) / [`When`](Suite::when) / [`Then`](Suite::then) handlers
+//! on a [`Suite`], point it at [`.feature`](Features) files, and [`run`](Suite::run) or
+//! [`run_blocking`](Suite::run_blocking). Handlers pull typed values from a
+//! [`StepContext`] via extractors such as capture params, [`CtxMut`] world leases, and
+//! scenario [`entity`] values.
+//!
+//! # Quick start
+//!
+//! ```no_run
+//! use cutecumber::prelude::*;
+//!
+//! #[derive(Default)]
+//! struct World {
+//!     cukes: u32,
+//! }
+//!
+//! let features = Features::builder().add_path("features").build();
+//! let mut suite = Suite::new(World::default);
+//! suite
+//!     .given(re(r"I have (\d+) cukes"), |n: u32, mut world: CtxMut<World>| {
+//!         world.cukes = n;
+//!     })
+//!     .bind(Printer::stdout());
+//! let _ = suite.run_blocking(&features);
+//! ```
+//!
+//! # Crate features
+//!
+//! - **`dialects`** (default): embed the full official Gherkin language catalog.
+//! - **`colour`** (default): ANSI-coloured [`ColourSyncPrinter`].
+//! - **`prelude`** (default): [`prelude`] re-exports of commonly used items.
+//! - **`json`**: legacy Cucumber JSON [`JsonReporter`](listener::JsonReporter).
+
 pub mod ast;
 pub mod entity;
 pub mod extract;
@@ -7,6 +42,8 @@ pub mod listener;
 pub mod loader;
 pub mod lock;
 pub mod outcome;
+#[cfg(feature = "prelude")]
+pub mod prelude;
 pub mod response;
 pub mod statement;
 pub mod suite;
@@ -27,8 +64,10 @@ pub use listener::{
 };
 #[cfg(feature = "colour")]
 pub use listener::{Colour, ColourSyncPrinter};
+#[cfg(feature = "json")]
+pub use listener::JsonReporter;
 pub use loader::{load_features, FeatureSource, LoadError};
-pub use lock::{Locked, ReadGuard, WriteGuard};
+pub use lock::{LockError, Locked, ReadGuard, WriteGuard};
 pub use outcome::Outcome;
 pub use response::{
     ArgumentRejection, CtxRejection, IntoStepResult, ParamRejection, RowRejection, StepError,

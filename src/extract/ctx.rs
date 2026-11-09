@@ -9,11 +9,13 @@ use super::{FromStep, StepContext};
 
 /// Exclusive mutable access to the scenario world.
 pub struct CtxMut<C> {
+    /// Exclusive lease; released when this extractor is dropped.
     guard: WriteGuard<C>,
 }
 
 /// Shared access to the scenario world.
 pub struct CtxRef<C> {
+    /// Shared lease; released when this extractor is dropped.
     guard: ReadGuard<C>,
 }
 

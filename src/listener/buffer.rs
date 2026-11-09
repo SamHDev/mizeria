@@ -16,6 +16,9 @@ pub(super) struct FeatureRecord {
     pub uri: String,
     pub keyword: String,
     pub name: String,
+    /// Source line; consumed by structured reporters (e.g. Cucumber JSON).
+    #[allow(dead_code)]
+    pub line: u32,
     pub scenarios: Vec<ScenarioRecord>,
     pub rules: Vec<RuleRecord>,
 }
@@ -24,6 +27,9 @@ pub(super) struct FeatureRecord {
 pub(super) struct RuleRecord {
     pub keyword: String,
     pub name: String,
+    /// Source line; retained for parity with other records.
+    #[allow(dead_code)]
+    pub line: u32,
     pub scenarios: Vec<ScenarioRecord>,
 }
 
@@ -31,6 +37,9 @@ pub(super) struct RuleRecord {
 pub(super) struct ScenarioRecord {
     pub keyword: String,
     pub name: String,
+    /// Source line; consumed by structured reporters (e.g. Cucumber JSON).
+    #[allow(dead_code)]
+    pub line: u32,
     pub steps: Vec<StepRecord>,
 }
 
@@ -38,7 +47,13 @@ pub(super) struct ScenarioRecord {
 pub(super) struct StepRecord {
     pub keyword: String,
     pub text: String,
+    /// Source line; consumed by structured reporters (e.g. Cucumber JSON).
+    #[allow(dead_code)]
+    pub line: u32,
     pub result: StepResult,
+    /// Nanoseconds spent on the step when timed by a reporter; otherwise `0`.
+    #[allow(dead_code)]
+    pub duration_nanos: u128,
 }
 
 impl ReportBuffer {
@@ -58,6 +73,7 @@ impl ReportBuffer {
             uri: event.uri.to_owned(),
             keyword: event.keyword.to_owned(),
             name: event.name.to_owned(),
+            line: event.location.line,
             scenarios: Vec::new(),
             rules: Vec::new(),
         });
@@ -80,6 +96,7 @@ impl ReportBuffer {
         feature.rules.push(RuleRecord {
             keyword: event.keyword.to_owned(),
             name: event.name.to_owned(),
+            line: event.location.line,
             scenarios: Vec::new(),
         });
         self.open_rule = Some(feature.rules.len() - 1);
@@ -98,6 +115,7 @@ impl ReportBuffer {
         let scenario = ScenarioRecord {
             keyword: event.keyword.to_owned(),
             name: event.name.to_owned(),
+            line: event.location.line,
             steps: Vec::new(),
         };
         let feature = &mut self.features[feature_idx];
@@ -113,7 +131,12 @@ impl ReportBuffer {
         self.open_scenario = false;
     }
 
-    pub fn on_step_finished(&mut self, event: &StepEvent<'_>, result: &StepResult) {
+    pub fn on_step_finished(
+        &mut self,
+        event: &StepEvent<'_>,
+        result: &StepResult,
+        duration_nanos: u128,
+    ) {
         if !self.open_scenario {
             return;
         }
@@ -123,7 +146,9 @@ impl ReportBuffer {
         let step = StepRecord {
             keyword: event.keyword.to_owned(),
             text: event.text.to_owned(),
+            line: event.location.line,
             result: result.clone(),
+            duration_nanos,
         };
         let feature = &mut self.features[feature_idx];
         let scenario = if let Some(rule_idx) = self.open_rule {

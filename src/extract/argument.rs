@@ -1,10 +1,15 @@
+//! Doc string and data table extractors.
+
 use crate::response::{ArgumentRejection, RowRejection};
 
 use super::row::FromRow;
 use super::{FromStep, StepArgument, StepContext};
 
 /// Extractor for a step doc string body.
-pub struct DocString<'s>(pub &'s str);
+pub struct DocString<'s>(
+    /// Raw docstring content (indent already stripped by the parser / runner).
+    pub &'s str,
+);
 
 impl<'s, C> FromStep<'s, C> for DocString<'s> {
     type Rejection = ArgumentRejection;
@@ -21,7 +26,10 @@ impl<'s, C> FromStep<'s, C> for DocString<'s> {
 }
 
 /// Extractor for a step data table (row-major cell slices).
-pub struct DataTable<'s>(pub &'s [&'s [&'s str]]);
+pub struct DataTable<'s>(
+    /// Rows of cell strings, borrowed from the step context.
+    pub &'s [&'s [&'s str]],
+);
 
 impl<'s> DataTable<'s> {
     /// Iterate rows parsed into `R` (typically a tuple of [`super::FromCapture`] types).

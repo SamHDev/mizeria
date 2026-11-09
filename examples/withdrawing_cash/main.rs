@@ -3,9 +3,7 @@
 use std::path::PathBuf;
 use std::str::FromStr;
 
-use cutecumber::{
-    Features, GetRef, InsertNamed, NamedMut, Param, Printer, Put, StepError, Suite, re,
-};
+use cutecumber::prelude::*;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct Balance(u64);
@@ -71,7 +69,7 @@ fn main() {
     let features_dir =
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("examples/withdrawing_cash/features");
 
-    let features = Features::new().add_path(features_dir).build();
+    let features = Features::builder().add_path(features_dir).build();
 
     let mut suite = Suite::new(|| ());
     suite

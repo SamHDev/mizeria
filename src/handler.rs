@@ -17,9 +17,12 @@ mod private {
 ///
 /// Marker parameter allows both plain results and futures to implement this trait.
 pub trait IntoStepFuture<M = private::ViaResult>: Send {
+    /// Value produced by the handler body (then converted via [`IntoStepResult`]).
     type Output: IntoStepResult;
+    /// Future that resolves to [`Self::Output`].
     type Future: Future<Output = Self::Output> + Send;
 
+    /// Lift a sync result or return an async future as-is.
     fn into_step_future(self) -> Self::Future;
 }
 
@@ -56,6 +59,7 @@ where
 ///
 /// Borrowed extractors (`Param<&str>`, …) are not `'static`; use [`call`] for those.
 pub trait Handler<T, C, M = private::ViaResult>: Clone + Send + Sized + 'static {
+    /// Extract arguments from `ctx`, run the body, and apply entity effects.
     fn call(self, ctx: StepContext<'_, C>) -> impl Future<Output = StepOutcome> + Send;
 }
 
@@ -119,6 +123,7 @@ where
 
 /// Lifetime-parameterized handler call supporting borrowed extractors.
 pub trait Call<'s, C, T, M = private::ViaResult>: Sized {
+    /// Extract arguments (possibly borrowed from `ctx`) and run the body.
     fn call_step(self, ctx: StepContext<'s, C>) -> impl Future<Output = StepOutcome> + 's;
 }
 

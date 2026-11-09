@@ -22,8 +22,11 @@ use crate::statement::{CaptureBag, Statement};
 /// Which Gherkin keyword a step definition was registered under.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum StepKeyword {
+    /// `Given` / context step.
     Given,
+    /// `When` / action step.
     When,
+    /// `Then` / outcome step.
     Then,
 }
 
@@ -65,6 +68,9 @@ where
 }
 
 /// Registered steps and world factory for a cucumber run.
+///
+/// `W` is the per-scenario world type constructed by the factory passed to
+/// [`Suite::new`].
 pub struct Suite<W> {
     world_factory: fn() -> W,
     steps: Vec<Box<dyn DynStep<W>>>,
@@ -92,7 +98,7 @@ impl<W> Suite<W> {
     /// Register a `Given` step.
     ///
     /// Handlers use owned extractors ([`Handler`]). Borrowed extractors such as
-    /// [`crate::Ctx`] are not yet supported at registration time.
+    /// [`crate::extract::Ctx`] are not yet supported at registration time.
     pub fn given<S, T, M, H>(&mut self, statement: S, handler: H) -> &mut Self
     where
         S: Statement + 'static,
@@ -161,11 +167,11 @@ impl<W> Suite<W> {
     }
 
     /// Async entrypoint: load features, execute scenarios, notify the listener.
-    pub fn run<'a>(&'a mut self, features: &'a Features) -> impl Future<Output = Outcome> + 'a
+    pub async fn run(&mut self, features: &Features) -> Outcome
     where
         W: Send + Sync + 'static,
     {
-        async move { self.run_inner(features).await }
+        self.run_inner(features).await
     }
 
     /// Blocking entrypoint (uses a minimal executor).
@@ -616,7 +622,7 @@ Feature: Cukes
 ",
         );
 
-        let features = Features::new().add_path(&feature).build();
+        let features = Features::builder().add_path(&feature).build();
         let listener = Arc::new(Mutex::new(RecordingListener::default()));
 
         let mut suite = Suite::new(new_world);
@@ -671,7 +677,7 @@ Feature: X
 ",
         );
 
-        let features = Features::new().add_path(&feature).build();
+        let features = Features::builder().add_path(&feature).build();
         let mut suite = Suite::new(new_world);
         let outcome = suite.run_blocking(&features);
         let _ = fs::remove_dir_all(&dir);
@@ -682,7 +688,7 @@ Feature: X
 
     #[test]
     fn registration_helpers_still_work() {
-        let features = Features::new().build();
+        let features = Features::builder().build();
         let mut suite = Suite::new(new_world);
         suite.given("a user exists", || {});
         suite.when(Regex::new(r"they log in").unwrap(), || {});
@@ -700,7 +706,7 @@ Feature: X
 
     #[tokio::test]
     async fn run_async_empty() {
-        let features = Features::new().build();
+        let features = Features::builder().build();
         let mut suite = Suite::new(new_world);
         suite.bind(Printer::stdout());
         let outcome = suite.run(&features).await;
