@@ -13,11 +13,12 @@ mod private {
     pub enum ViaFuture {}
 }
 
-/// Convert a handler return value into a future yielding [`StepOutcome`].
+/// Convert a handler return value into a future yielding the raw result.
 ///
 /// Marker parameter allows both plain results and futures to implement this trait.
 pub trait IntoStepFuture<M = private::ViaResult>: Send {
-    type Future: Future<Output = StepOutcome> + Send;
+    type Output: IntoStepResult;
+    type Future: Future<Output = Self::Output> + Send;
 
     fn into_step_future(self) -> Self::Future;
 }
@@ -26,10 +27,11 @@ impl<R> IntoStepFuture<private::ViaResult> for R
 where
     R: IntoStepResult + Send,
 {
-    type Future = std::future::Ready<StepOutcome>;
+    type Output = R;
+    type Future = std::future::Ready<R>;
 
     fn into_step_future(self) -> Self::Future {
-        std::future::ready(self.into_step_result())
+        std::future::ready(self)
     }
 }
 
@@ -38,42 +40,21 @@ where
     F: Future<Output = O> + Send,
     O: IntoStepResult,
 {
-    type Future = IntoStepResultFuture<F>;
+    type Output = O;
+    type Future = F;
 
     fn into_step_future(self) -> Self::Future {
-        IntoStepResultFuture { inner: self }
-    }
-}
-
-/// Maps a future's output through [`IntoStepResult`].
-#[doc(hidden)]
-pub struct IntoStepResultFuture<F> {
-    inner: F,
-}
-
-impl<F, O> Future for IntoStepResultFuture<F>
-where
-    F: Future<Output = O>,
-    O: IntoStepResult,
-{
-    type Output = StepOutcome;
-
-    fn poll(
-        self: std::pin::Pin<&mut Self>,
-        cx: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<Self::Output> {
-        // SAFETY: structural pin of `inner` only field.
-        let inner = unsafe { self.map_unchecked_mut(|s| &mut s.inner) };
-        inner.poll(cx).map(IntoStepResult::into_step_result)
+        self
     }
 }
 
 /// A step function that extracts **owned** typed arguments from a [`StepContext`].
 ///
 /// Extractors run synchronously left-to-right. The function body may be sync or async
-/// via [`IntoStepFuture`].
+/// via [`IntoStepFuture`]. Entity leases held by extractors are dropped before return
+/// values apply [`crate::entity::Effect`]s.
 ///
-/// Borrowed extractors (`Ctx<'_>`, `Param<&str>`, …) are not `'static`; use [`call`] for those.
+/// Borrowed extractors (`Param<&str>`, …) are not `'static`; use [`call`] for those.
 pub trait Handler<T, C, M = private::ViaResult>: Clone + Send + Sized + 'static {
     fn call(self, ctx: StepContext<'_, C>) -> impl Future<Output = StepOutcome> + Send;
 }
@@ -87,16 +68,19 @@ macro_rules! impl_handler {
             Fut: IntoStepFuture<M>,
             $($ty: for<'a> FromStep<'a, C> + Send + 'static,)*
             $(for<'a> <$ty as FromStep<'a, C>>::Rejection: Into<StepError> + Send,)*
-            C: Send + 'static,
+            C: Send + Sync + 'static,
         {
             async fn call(self, mut ctx: StepContext<'_, C>) -> StepOutcome {
-                $(
-                    let $ty = match <$ty as FromStep<'_, C>>::from_step(&mut ctx) {
-                        Ok(value) => value,
-                        Err(rejection) => return rejection_to_outcome(rejection),
-                    };
-                )*
-                IntoStepFuture::into_step_future(self($($ty,)*)).await
+                let output = {
+                    $(
+                        let $ty = match <$ty as FromStep<'_, C>>::from_step(&mut ctx) {
+                            Ok(value) => value,
+                            Err(rejection) => return rejection_to_outcome(rejection),
+                        };
+                    )*
+                    IntoStepFuture::into_step_future(self($($ty,)*)).await
+                };
+                output.into_step_result(ctx.entities_mut())
             }
         }
     };
@@ -122,8 +106,7 @@ impl_handler!(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, 
 
 /// Invoke a step function with extractors that may borrow from the context.
 ///
-/// Prefer this over [`Handler`] when using [`crate::extract::Ctx`] or
-/// [`crate::extract::Param<&str>`].
+/// Prefer this over [`Handler`] when using [`crate::extract::Param<&str>`].
 pub fn call<'s, C, T, M, H>(
     handler: H,
     ctx: StepContext<'s, C>,
@@ -147,19 +130,23 @@ macro_rules! impl_call {
             F: FnOnce($($ty,)*) -> Fut + 's,
             Fut: IntoStepFuture<M> + 's,
             Fut::Future: 's,
+            Fut::Output: 's,
             M: 's,
             C: 's,
             $($ty: FromStep<'s, C> + 's,)*
             $(<$ty as FromStep<'s, C>>::Rejection: Into<StepError>,)*
         {
             async fn call_step(self, mut ctx: StepContext<'s, C>) -> StepOutcome {
-                $(
-                    let $ty = match <$ty as FromStep<'s, C>>::from_step(&mut ctx) {
-                        Ok(value) => value,
-                        Err(rejection) => return rejection_to_outcome(rejection),
-                    };
-                )*
-                IntoStepFuture::into_step_future(self($($ty,)*)).await
+                let output = {
+                    $(
+                        let $ty = match <$ty as FromStep<'s, C>>::from_step(&mut ctx) {
+                            Ok(value) => value,
+                            Err(rejection) => return rejection_to_outcome(rejection),
+                        };
+                    )*
+                    IntoStepFuture::into_step_future(self($($ty,)*)).await
+                };
+                output.into_step_result(ctx.entities_mut())
             }
         }
     };

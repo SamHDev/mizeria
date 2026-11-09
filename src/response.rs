@@ -4,6 +4,8 @@ use std::borrow::Cow;
 use std::convert::Infallible;
 use std::fmt;
 
+use crate::entity::EntityBag;
+
 /// Result of running a step handler.
 #[derive(Debug)]
 pub enum StepOutcome {
@@ -43,25 +45,25 @@ impl From<Infallible> for StepError {
     }
 }
 
-/// Convert a handler return value into a [`StepOutcome`].
+/// Convert a handler return value into a [`StepOutcome`], applying entity effects.
 pub trait IntoStepResult {
-    fn into_step_result(self) -> StepOutcome;
+    fn into_step_result(self, entities: &mut EntityBag) -> StepOutcome;
 }
 
 impl IntoStepResult for () {
-    fn into_step_result(self) -> StepOutcome {
+    fn into_step_result(self, _entities: &mut EntityBag) -> StepOutcome {
         StepOutcome::Ok
     }
 }
 
 impl IntoStepResult for StepOutcome {
-    fn into_step_result(self) -> StepOutcome {
+    fn into_step_result(self, _entities: &mut EntityBag) -> StepOutcome {
         self
     }
 }
 
 impl IntoStepResult for StepError {
-    fn into_step_result(self) -> StepOutcome {
+    fn into_step_result(self, _entities: &mut EntityBag) -> StepOutcome {
         StepOutcome::Failed(self)
     }
 }
@@ -71,21 +73,27 @@ where
     T: IntoStepResult,
     E: Into<StepError>,
 {
-    fn into_step_result(self) -> StepOutcome {
+    fn into_step_result(self, entities: &mut EntityBag) -> StepOutcome {
         match self {
-            Ok(ok) => ok.into_step_result(),
+            Ok(ok) => ok.into_step_result(entities),
             Err(err) => StepOutcome::Failed(err.into()),
         }
     }
 }
 
-/// World was missing or already taken by another extractor.
+/// World was missing, already taken, or locked by another extractor.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct CtxRejection;
+pub enum CtxRejection {
+    Missing,
+    Locked,
+}
 
 impl fmt::Display for CtxRejection {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str("world context already taken or missing")
+        match self {
+            Self::Missing => f.write_str("world context missing"),
+            Self::Locked => f.write_str("world context locked by another extractor"),
+        }
     }
 }
 

@@ -1,48 +1,67 @@
-use std::sync::Arc;
+//! Locked world extractors.
 
+use std::ops::{Deref, DerefMut};
+
+use crate::lock::{ReadGuard, WriteGuard};
 use crate::response::CtxRejection;
 
 use super::{FromStep, StepContext};
 
-/// Extractor for mutable access to the scenario world.
-pub struct Ctx<'s, C>(pub &'s mut C);
+/// Exclusive mutable access to the scenario world.
+pub struct CtxMut<C> {
+    guard: WriteGuard<C>,
+}
 
-impl<'s, C> std::ops::Deref for Ctx<'s, C> {
+/// Shared access to the scenario world.
+pub struct CtxRef<C> {
+    guard: ReadGuard<C>,
+}
+
+/// Alias for [`CtxMut`] (exclusive world lease).
+pub type Ctx<C> = CtxMut<C>;
+
+impl<C> Deref for CtxMut<C> {
     type Target = C;
 
     fn deref(&self) -> &Self::Target {
-        self.0
+        &self.guard
     }
 }
 
-impl<'s, C> std::ops::DerefMut for Ctx<'s, C> {
+impl<C> DerefMut for CtxMut<C> {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        self.0
+        &mut self.guard
     }
 }
 
-impl<'s, C> FromStep<'s, C> for Ctx<'s, C> {
-    type Rejection = CtxRejection;
+impl<C> Deref for CtxRef<C> {
+    type Target = C;
 
-    fn from_step(ctx: &mut StepContext<'s, C>) -> Result<Self, Self::Rejection> {
-        ctx.take_world().map(Ctx).ok_or(CtxRejection)
+    fn deref(&self) -> &Self::Target {
+        &self.guard
     }
 }
 
-/// Clone an [`Arc`] world out of the step context.
-///
-/// Useful with [`crate::Suite`] registration, which currently requires owned
-/// ([`crate::Handler`]) extractors — prefer `Arc<Mutex<W>>` (or similar) as the
-/// suite world type, then extract `Arc<_>` here.
-impl<'s, C> FromStep<'s, Arc<C>> for Arc<C>
+impl<'s, C> FromStep<'s, C> for CtxMut<C>
 where
-    C: ?Sized + Send + Sync + 'static,
+    C: Send + Sync + 'static,
 {
     type Rejection = CtxRejection;
 
-    fn from_step(ctx: &mut StepContext<'s, Arc<C>>) -> Result<Self, Self::Rejection> {
-        ctx.take_world()
-            .map(|world| Arc::clone(world))
-            .ok_or(CtxRejection)
+    fn from_step(ctx: &mut StepContext<'s, C>) -> Result<Self, Self::Rejection> {
+        let guard = ctx.world().try_write().map_err(|_| CtxRejection::Locked)?;
+        Ok(CtxMut { guard })
+    }
+}
+
+impl<'s, C> FromStep<'s, C> for CtxRef<C>
+where
+    C: Send + Sync + 'static,
+{
+    type Rejection = CtxRejection;
+
+    fn from_step(ctx: &mut StepContext<'s, C>) -> Result<Self, Self::Rejection> {
+        let guard = ctx.world().try_read().map_err(|_| CtxRejection::Locked)?;
+        Ok(CtxRef { guard })
     }
 }

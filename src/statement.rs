@@ -189,6 +189,17 @@ impl Regex {
     }
 }
 
+/// Compile a step regex, panicking with a clear message if the pattern is invalid.
+///
+/// Prefer this over `Regex::new(...).unwrap()` when registering steps at startup.
+#[track_caller]
+pub fn re(pattern: &str) -> Regex {
+    match Regex::new(pattern) {
+        Ok(regex) => regex,
+        Err(err) => panic!("invalid step regex `{pattern}`: {err}"),
+    }
+}
+
 impl Statement for Regex {
     type Captures<'s>
         = RegexCaptures<'s>
@@ -277,6 +288,18 @@ mod tests {
     #[test]
     fn regex_invalid_pattern() {
         assert!(Regex::new(r"(unterminated").is_err());
+    }
+
+    #[test]
+    fn re_compiles_valid_pattern() {
+        let stmt = re(r"I have (\d+) cukes");
+        assert!(stmt.matches("I have 3 cukes").is_some());
+    }
+
+    #[test]
+    #[should_panic(expected = "invalid step regex `(unterminated`:")]
+    fn re_panics_on_invalid_pattern() {
+        let _ = re(r"(unterminated");
     }
 
     #[test]

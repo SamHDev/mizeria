@@ -9,12 +9,14 @@ mod param;
 mod row;
 
 pub use argument::{DataTable, DocString};
-pub use ctx::Ctx;
+pub use ctx::{Ctx, CtxMut, CtxRef};
 pub use param::{parse_from_str, FromCapture, Param};
 pub use row::FromRow;
 
 use std::convert::Infallible;
 
+use crate::entity::EntityBag;
+use crate::lock::Locked;
 use crate::response::{ArgumentRejection, StepError};
 use crate::statement::Captures;
 
@@ -28,7 +30,8 @@ pub enum StepArgument<'s> {
 
 /// Mutable view of one step invocation, analogous to an HTTP request in Axum.
 pub struct StepContext<'s, C> {
-    world: Option<&'s mut C>,
+    world: Locked<C>,
+    entities: &'s mut EntityBag,
     captures: Box<dyn Captures<'s> + Send + 's>,
     argument: Option<StepArgument<'s>>,
     argument_taken: bool,
@@ -36,21 +39,31 @@ pub struct StepContext<'s, C> {
 
 impl<'s, C> StepContext<'s, C> {
     pub fn new(
-        world: &'s mut C,
+        world: Locked<C>,
+        entities: &'s mut EntityBag,
         captures: impl Captures<'s> + 's,
         argument: Option<StepArgument<'s>>,
     ) -> Self {
         Self {
-            world: Some(world),
+            world,
+            entities,
             captures: Box::new(captures),
             argument,
             argument_taken: false,
         }
     }
 
-    /// Take the world reference. At most once per invocation.
-    pub fn take_world(&mut self) -> Option<&'s mut C> {
-        self.world.take()
+    /// Clone of the locked world handle (for [`CtxRef`] / [`CtxMut`]).
+    pub fn world(&self) -> Locked<C> {
+        self.world.clone()
+    }
+
+    pub fn entities(&self) -> &EntityBag {
+        self.entities
+    }
+
+    pub fn entities_mut(&mut self) -> &mut EntityBag {
+        self.entities
     }
 
     /// Next unused positional capture, advancing the cursor.

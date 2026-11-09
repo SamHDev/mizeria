@@ -1,9 +1,11 @@
 use std::collections::HashMap;
 
+use crate::entity::EntityBag;
 use crate::extract::{
-    Ctx, DataTable, DocString, FromStep, Param, StepArgument, StepContext,
+    CtxMut, CtxRef, DataTable, DocString, FromStep, Param, StepArgument, StepContext,
 };
 use crate::handler::call;
+use crate::lock::Locked;
 use crate::response::{ParamRejection, StepError, StepOutcome};
 use crate::statement::{EmptyCaptures, SliceCaptures};
 
@@ -25,11 +27,11 @@ impl<'s, C> FromStep<'s, C> for Currency {
 }
 
 fn withdraw(
-    mut ctx: Ctx<'_, World>,
-    person: &str,
+    mut world: CtxMut<World>,
+    person: String,
     amount: Currency,
 ) -> Result<(), StepError> {
-    let balance = ctx.balances.entry(person.to_owned()).or_default();
+    let balance = world.balances.entry(person).or_default();
     match balance.checked_sub(amount.0) {
         Some(next) => {
             *balance = next;
@@ -40,25 +42,57 @@ fn withdraw(
 }
 
 #[tokio::test]
-async fn withdraw_with_borrowed_extractors() {
-    let mut world = World {
+async fn withdraw_with_world_mut() {
+    let world = Locked::new(World {
         balances: HashMap::from([("Alice".into(), 500)]),
-    };
+    });
+    let mut entities = EntityBag::new();
     let captures = ["Alice", "1.25"];
-    let ctx = StepContext::new(&mut world, SliceCaptures::new(&captures), None);
+    let ctx = StepContext::new(
+        world.clone(),
+        &mut entities,
+        SliceCaptures::new(&captures),
+        None,
+    );
 
     let outcome = call(withdraw, ctx).await;
     assert!(matches!(outcome, StepOutcome::Ok));
-    assert_eq!(world.balances.get("Alice"), Some(&375));
+    assert_eq!(
+        world.try_read().unwrap().balances.get("Alice"),
+        Some(&375)
+    );
 }
 
 #[tokio::test]
-async fn ctx_taken_twice_rejects() {
-    fn twice(_a: Ctx<'_, World>, _b: Ctx<'_, World>) {}
+async fn ctx_mut_twice_rejects() {
+    fn twice(_a: CtxMut<World>, _b: CtxMut<World>) {}
 
-    let mut world = World::default();
-    let ctx = StepContext::new(&mut world, EmptyCaptures, None);
+    let world = Locked::new(World::default());
+    let mut entities = EntityBag::new();
+    let ctx = StepContext::new(world, &mut entities, EmptyCaptures, None);
     let outcome = call(twice, ctx).await;
+    assert!(matches!(outcome, StepOutcome::Failed(_)));
+}
+
+#[tokio::test]
+async fn two_ctx_ref_ok() {
+    fn twice(_a: CtxRef<World>, _b: CtxRef<World>) {}
+
+    let world = Locked::new(World::default());
+    let mut entities = EntityBag::new();
+    let ctx = StepContext::new(world, &mut entities, EmptyCaptures, None);
+    let outcome = call(twice, ctx).await;
+    assert!(matches!(outcome, StepOutcome::Ok));
+}
+
+#[tokio::test]
+async fn ctx_ref_and_mut_rejects() {
+    fn both(_a: CtxRef<World>, _b: CtxMut<World>) {}
+
+    let world = Locked::new(World::default());
+    let mut entities = EntityBag::new();
+    let ctx = StepContext::new(world, &mut entities, EmptyCaptures, None);
+    let outcome = call(both, ctx).await;
     assert!(matches!(outcome, StepOutcome::Failed(_)));
 }
 
@@ -66,8 +100,9 @@ async fn ctx_taken_twice_rejects() {
 async fn missing_capture_rejects() {
     fn needs_param(_: u32) {}
 
-    let mut world = World::default();
-    let ctx = StepContext::new(&mut world, EmptyCaptures, None);
+    let world = Locked::new(World::default());
+    let mut entities = EntityBag::new();
+    let ctx = StepContext::new(world, &mut entities, EmptyCaptures, None);
     let outcome = call(needs_param, ctx).await;
     assert!(matches!(outcome, StepOutcome::Failed(_)));
 }
@@ -85,9 +120,15 @@ async fn result_param_absorbs_parse_errors() {
         }
     }
 
-    let mut world = World::default();
+    let world = Locked::new(World::default());
+    let mut entities = EntityBag::new();
     let captures = ["abc"];
-    let ctx = StepContext::new(&mut world, SliceCaptures::new(&captures), None);
+    let ctx = StepContext::new(
+        world,
+        &mut entities,
+        SliceCaptures::new(&captures),
+        None,
+    );
     let outcome = call(maybe, ctx).await;
     assert!(matches!(outcome, StepOutcome::Ok));
 }
@@ -99,18 +140,21 @@ async fn docstring_take_once() {
         Ok(())
     }
 
-    let mut world = World::default();
+    let world = Locked::new(World::default());
+    let mut entities = EntityBag::new();
     let ctx = StepContext::new(
-        &mut world,
+        world.clone(),
+        &mut entities,
         EmptyCaptures,
         Some(StepArgument::DocString("hello")),
     );
     assert!(matches!(call(read_doc, ctx).await, StepOutcome::Ok));
 
     fn read_two(_a: DocString<'_>, _b: DocString<'_>) {}
-    let mut world = World::default();
+    let mut entities = EntityBag::new();
     let ctx = StepContext::new(
-        &mut world,
+        world,
+        &mut entities,
         EmptyCaptures,
         Some(StepArgument::DocString("hello")),
     );
@@ -128,8 +172,14 @@ async fn data_table_extractor() {
     let row1: &[&str] = &["c", "d"];
     let rows: &[&[&str]] = &[row0, row1];
 
-    let mut world = World::default();
-    let ctx = StepContext::new(&mut world, EmptyCaptures, Some(StepArgument::DataTable(rows)));
+    let world = Locked::new(World::default());
+    let mut entities = EntityBag::new();
+    let ctx = StepContext::new(
+        world,
+        &mut entities,
+        EmptyCaptures,
+        Some(StepArgument::DataTable(rows)),
+    );
     assert!(matches!(call(read_table, ctx).await, StepOutcome::Ok));
 }
 
@@ -139,9 +189,15 @@ async fn bare_std_from_str_params() {
         assert_eq!(a + b, 5);
     }
 
-    let mut world = World::default();
+    let world = Locked::new(World::default());
+    let mut entities = EntityBag::new();
     let captures = ["2", "3"];
-    let ctx = StepContext::new(&mut world, SliceCaptures::new(&captures), None);
+    let ctx = StepContext::new(
+        world,
+        &mut entities,
+        SliceCaptures::new(&captures),
+        None,
+    );
     let outcome = call(add_ok, ctx).await;
     assert!(matches!(outcome, StepOutcome::Ok));
 }
@@ -152,9 +208,15 @@ async fn async_handler_body() {
         assert_eq!(name, "bob");
     }
 
-    let mut world = World::default();
+    let world = Locked::new(World::default());
+    let mut entities = EntityBag::new();
     let captures = ["bob"];
-    let ctx = StepContext::new(&mut world, SliceCaptures::new(&captures), None);
+    let ctx = StepContext::new(
+        world,
+        &mut entities,
+        SliceCaptures::new(&captures),
+        None,
+    );
     let outcome = call(greets, ctx).await;
     assert!(matches!(outcome, StepOutcome::Ok));
 }
@@ -167,18 +229,30 @@ async fn owned_handler_trait_object_style() {
         assert_eq!(a + b, 5);
     }
 
-    let mut world = World::default();
+    let world = Locked::new(World::default());
+    let mut entities = EntityBag::new();
     let captures = ["2", "3"];
-    let ctx = StepContext::new(&mut world, SliceCaptures::new(&captures), None);
+    let ctx = StepContext::new(
+        world,
+        &mut entities,
+        SliceCaptures::new(&captures),
+        None,
+    );
     let outcome = <fn(u32, u32) as Handler<(u32, u32), World>>::call(add_ok, ctx).await;
     assert!(matches!(outcome, StepOutcome::Ok));
 }
 
 #[test]
 fn currency_float_to_cents() {
-    let mut world = World::default();
+    let world = Locked::new(World::default());
+    let mut entities = EntityBag::new();
     let captures = ["12.34"];
-    let mut ctx = StepContext::new(&mut world, SliceCaptures::new(&captures), None);
+    let mut ctx = StepContext::new(
+        world,
+        &mut entities,
+        SliceCaptures::new(&captures),
+        None,
+    );
     let Currency(cents) = Currency::from_step(&mut ctx).unwrap();
     assert_eq!(cents, 1234);
 }
@@ -200,9 +274,15 @@ async fn custom_from_str_via_param() {
         assert_eq!(color.0, "red");
     }
 
-    let mut world = World::default();
+    let world = Locked::new(World::default());
+    let mut entities = EntityBag::new();
     let captures = ["red"];
-    let ctx = StepContext::new(&mut world, SliceCaptures::new(&captures), None);
+    let ctx = StepContext::new(
+        world,
+        &mut entities,
+        SliceCaptures::new(&captures),
+        None,
+    );
     assert!(matches!(call(paint, ctx).await, StepOutcome::Ok));
 }
 
@@ -223,8 +303,14 @@ async fn data_table_typed_rows() {
     let row1: &[&str] = &["bob", "1", "x"];
     let rows: &[&[&str]] = &[row0, row1];
 
-    let mut world = World::default();
-    let ctx = StepContext::new(&mut world, EmptyCaptures, Some(StepArgument::DataTable(rows)));
+    let world = Locked::new(World::default());
+    let mut entities = EntityBag::new();
+    let ctx = StepContext::new(
+        world,
+        &mut entities,
+        EmptyCaptures,
+        Some(StepArgument::DataTable(rows)),
+    );
     assert!(matches!(call(ingest, ctx).await, StepOutcome::Ok));
 
     let bad: &[&str] = &["only"];

@@ -1,4 +1,4 @@
-use std::str::FromStr;
+use std::{ops::{Deref, DerefMut}, str::FromStr};
 
 use crate::response::ParamRejection;
 
@@ -9,6 +9,20 @@ use super::{FromStep, StepContext};
 /// Prefer bare std types (`u32`, `String`, …) or [`&str`] when possible; use
 /// `Param<T>` for custom [`FromStr`] types.
 pub struct Param<T>(pub T);
+
+impl<T> DerefMut for Param<T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+impl<T> Deref for Param<T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
 
 /// Parse (or borrow) a single capture / table cell string into `Self`.
 pub trait FromCapture<'s>: Sized {

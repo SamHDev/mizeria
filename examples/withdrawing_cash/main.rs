@@ -1,17 +1,14 @@
 //! Example: bank withdrawals expressed as a Gherkin feature.
 
-use std::collections::HashMap;
 use std::path::PathBuf;
 use std::str::FromStr;
-use std::sync::{Arc, Mutex};
 
-use cutecumber::{Features, Param, Printer, Regex, StepError, Suite};
+use cutecumber::{
+    Features, GetRef, InsertNamed, NamedMut, Param, Printer, Put, StepError, Suite, re,
+};
 
-#[derive(Debug, Default)]
-struct World {
-    balances: HashMap<String, u64>,
-    last_withdrawal: Option<Withdrawal>,
-}
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct Balance(u64);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Withdrawal {
@@ -39,47 +36,34 @@ impl FromStr for Currency {
     }
 }
 
-type SharedWorld = Arc<Mutex<World>>;
-
-fn new_world() -> SharedWorld {
-    Arc::new(Mutex::new(World::default()))
-}
-
-fn has_balance(person: String, Param(Currency(amount)): Param<Currency>, world: SharedWorld) {
-    world.lock().unwrap().balances.insert(person, amount);
+fn has_balance(person: String, Param(Currency(amount)): Param<Currency>) -> InsertNamed<Balance> {
+    InsertNamed::named(person, Balance(amount))
 }
 
 fn try_withdraw(
-    person: String,
+    mut balance: NamedMut<Balance>,
     Param(Currency(amount)): Param<Currency>,
-    world: SharedWorld,
-) -> Result<(), StepError> {
-    let mut world = world.lock().unwrap();
-    let balance = world.balances.entry(person).or_default();
-    let result = match balance.checked_sub(amount) {
+) -> Result<Put<Withdrawal>, StepError> {
+    match balance.0.checked_sub(amount) {
         Some(next) => {
-            *balance = next;
-            Withdrawal::Successful
+            balance.0 = next;
+            Ok(Put::new(Withdrawal::Successful))
         }
-        None => Withdrawal::Declined,
-    };
-    world.last_withdrawal = Some(result);
-    Ok(())
-}
-
-fn withdrawal_successful(world: SharedWorld) -> Result<(), StepError> {
-    match world.lock().unwrap().last_withdrawal {
-        Some(Withdrawal::Successful) => Ok(()),
-        Some(Withdrawal::Declined) => Err(StepError::new("expected successful withdrawal")),
-        None => Err(StepError::new("no withdrawal attempted")),
+        None => Ok(Put::new(Withdrawal::Declined)),
     }
 }
 
-fn withdrawal_declined(world: SharedWorld) -> Result<(), StepError> {
-    match world.lock().unwrap().last_withdrawal {
-        Some(Withdrawal::Declined) => Ok(()),
-        Some(Withdrawal::Successful) => Err(StepError::new("expected declined withdrawal")),
-        None => Err(StepError::new("no withdrawal attempted")),
+fn withdrawal_successful(w: GetRef<Withdrawal>) -> Result<(), StepError> {
+    match *w {
+        Withdrawal::Successful => Ok(()),
+        Withdrawal::Declined => Err(StepError::new("expected successful withdrawal")),
+    }
+}
+
+fn withdrawal_declined(w: GetRef<Withdrawal>) -> Result<(), StepError> {
+    match *w {
+        Withdrawal::Declined => Ok(()),
+        Withdrawal::Successful => Err(StepError::new("expected declined withdrawal")),
     }
 }
 
@@ -89,16 +73,10 @@ fn main() {
 
     let features = Features::new().add_path(features_dir).build();
 
-    let mut suite = Suite::new(new_world);
+    let mut suite = Suite::new(|| ());
     suite
-        .given(
-            Regex::new(r"(\w+) has (\d+\.\d{2}) in their account").unwrap(),
-            has_balance,
-        )
-        .when(
-            Regex::new(r"(\w+) tries to withdraw (\d+\.\d{2})").unwrap(),
-            try_withdraw,
-        )
+        .given(re(r"(\w+) has (\d+\.\d{2}) in their account"), has_balance)
+        .when(re(r"(\w+) tries to withdraw (\d+\.\d{2})"), try_withdraw)
         .then("the withdrawal is successful", withdrawal_successful)
         .then("the withdrawal is declined", withdrawal_declined)
         .bind(Printer::stdout().symbols(true));

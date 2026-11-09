@@ -6,6 +6,7 @@ use std::marker::PhantomData;
 use std::pin::Pin;
 
 use crate::ast::{self, Background, FeatureChild, Location, RuleChild, Scenario, Step};
+use crate::entity::EntityBag;
 use crate::extract::{StepArgument, StepContext};
 use crate::features::Features;
 use crate::handler::Handler;
@@ -13,6 +14,7 @@ use crate::listener::{
     FeatureEvent, Listener, RuleEvent, ScenarioEvent, StepEvent, StepResult,
 };
 use crate::loader;
+use crate::lock::Locked;
 use crate::outcome::Outcome;
 use crate::response::StepOutcome;
 use crate::statement::{CaptureBag, Statement};
@@ -46,7 +48,7 @@ where
     H: Handler<T, W, M> + Sync,
     T: 'static,
     M: 'static,
-    W: Send + 'static,
+    W: Send + Sync + 'static,
 {
     fn matches(&self, text: &str) -> Option<CaptureBag> {
         let caps = self.statement.matches(text)?;
@@ -97,7 +99,7 @@ impl<W> Suite<W> {
         H: Handler<T, W, M> + Sync,
         T: 'static,
         M: 'static,
-        W: Send + 'static,
+        W: Send + Sync + 'static,
     {
         self.push(StepKeyword::Given, statement, handler)
     }
@@ -109,7 +111,7 @@ impl<W> Suite<W> {
         H: Handler<T, W, M> + Sync,
         T: 'static,
         M: 'static,
-        W: Send + 'static,
+        W: Send + Sync + 'static,
     {
         self.push(StepKeyword::When, statement, handler)
     }
@@ -121,7 +123,7 @@ impl<W> Suite<W> {
         H: Handler<T, W, M> + Sync,
         T: 'static,
         M: 'static,
-        W: Send + 'static,
+        W: Send + Sync + 'static,
     {
         self.push(StepKeyword::Then, statement, handler)
     }
@@ -132,7 +134,7 @@ impl<W> Suite<W> {
         H: Handler<T, W, M> + Sync,
         T: 'static,
         M: 'static,
-        W: Send + 'static,
+        W: Send + Sync + 'static,
     {
         self.keywords.push(keyword);
         self.steps.push(Box::new(StepBinding {
@@ -161,7 +163,7 @@ impl<W> Suite<W> {
     /// Async entrypoint: load features, execute scenarios, notify the listener.
     pub fn run<'a>(&'a mut self, features: &'a Features) -> impl Future<Output = Outcome> + 'a
     where
-        W: Send + 'static,
+        W: Send + Sync + 'static,
     {
         async move { self.run_inner(features).await }
     }
@@ -169,14 +171,14 @@ impl<W> Suite<W> {
     /// Blocking entrypoint (uses a minimal executor).
     pub fn run_blocking(&mut self, features: &Features) -> Outcome
     where
-        W: Send + 'static,
+        W: Send + Sync + 'static,
     {
         pollster::block_on(self.run_inner(features))
     }
 
     async fn run_inner(&mut self, features: &Features) -> Outcome
     where
-        W: Send + 'static,
+        W: Send + Sync + 'static,
     {
         if let Some(listener) = self.listener.as_mut() {
             listener.on_run_started();
@@ -207,7 +209,7 @@ impl<W> Suite<W> {
         source: &loader::FeatureSource,
         outcome: &mut Outcome,
     ) where
-        W: Send + 'static,
+        W: Send + Sync + 'static,
     {
         let doc = match ast::parse(&source.source) {
             Ok(doc) => doc,
@@ -283,7 +285,7 @@ impl<W> Suite<W> {
         scenario: &Scenario<'_>,
         outcome: &mut Outcome,
     ) where
-        W: Send + 'static,
+        W: Send + Sync + 'static,
     {
         let examples = expand_examples(scenario);
         for example in examples {
@@ -300,7 +302,7 @@ impl<W> Suite<W> {
         example: &ExampleRow,
         outcome: &mut Outcome,
     ) where
-        W: Send + 'static,
+        W: Send + Sync + 'static,
     {
         let scenario_event = ScenarioEvent {
             name: scenario.name,
@@ -312,7 +314,8 @@ impl<W> Suite<W> {
             listener.on_scenario_started(&scenario_event);
         }
 
-        let mut world = (self.world_factory)();
+        let world = Locked::new((self.world_factory)());
+        let mut entities = EntityBag::new();
         let mut status = ScenarioStatus::Passed;
         let mut skip_rest = false;
 
@@ -339,7 +342,7 @@ impl<W> Suite<W> {
             let result = if skip_rest {
                 StepResult::Skipped
             } else {
-                self.execute_step(&mut world, step).await
+                self.execute_step(&world, &mut entities, step).await
             };
 
             match &result {
@@ -371,9 +374,14 @@ impl<W> Suite<W> {
         }
     }
 
-    async fn execute_step(&self, world: &mut W, step: &RunnableStep) -> StepResult
+    async fn execute_step(
+        &self,
+        world: &Locked<W>,
+        entities: &mut EntityBag,
+        step: &RunnableStep,
+    ) -> StepResult
     where
-        W: Send + 'static,
+        W: Send + Sync + 'static,
     {
         let Some((binding, captures)) = self
             .steps
@@ -385,7 +393,8 @@ impl<W> Suite<W> {
 
         if let Some(doc) = step.doc_string.as_ref() {
             let ctx = StepContext::new(
-                world,
+                world.clone(),
+                entities,
                 captures.view(),
                 Some(StepArgument::DocString(doc.as_str())),
             );
@@ -399,14 +408,15 @@ impl<W> Suite<W> {
                 .collect();
             let rows: Vec<&[&str]> = row_vecs.iter().map(Vec::as_slice).collect();
             let ctx = StepContext::new(
-                world,
+                world.clone(),
+                entities,
                 captures.view(),
                 Some(StepArgument::DataTable(rows.as_slice())),
             );
             return map_outcome(binding.invoke(ctx).await);
         }
 
-        let ctx = StepContext::new(world, captures.view(), None);
+        let ctx = StepContext::new(world.clone(), entities, captures.view(), None);
         map_outcome(binding.invoke(ctx).await)
     }
 }
@@ -518,6 +528,7 @@ fn expand_examples(scenario: &Scenario<'_>) -> Vec<ExampleRow> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::extract::CtxMut;
     use crate::listener::{Listener, Printer};
     use crate::outcome::Outcome;
     use crate::statement::Regex;
@@ -530,8 +541,8 @@ mod tests {
         cukes: u32,
     }
 
-    fn new_world() -> Arc<Mutex<World>> {
-        Arc::new(Mutex::new(World::default()))
+    fn new_world() -> World {
+        World::default()
     }
 
     #[derive(Default)]
@@ -611,20 +622,20 @@ Feature: Cukes
         let mut suite = Suite::new(new_world);
         suite.given(
             Regex::new(r"I have (\d+) cukes?").unwrap(),
-            |n: u32, world: Arc<Mutex<World>>| {
-                world.lock().unwrap().cukes = n;
+            |n: u32, mut world: CtxMut<World>| {
+                world.cukes = n;
             },
         );
         suite.when(
             Regex::new(r"I eat (\d+) cukes?").unwrap(),
-            |n: u32, world: Arc<Mutex<World>>| {
-                world.lock().unwrap().cukes -= n;
+            |n: u32, mut world: CtxMut<World>| {
+                world.cukes -= n;
             },
         );
         suite.then(
             Regex::new(r"I have (\d+) cukes? left").unwrap(),
-            |n: u32, world: Arc<Mutex<World>>| {
-                assert_eq!(world.lock().unwrap().cukes, n);
+            |n: u32, world: CtxMut<World>| {
+                assert_eq!(world.cukes, n);
             },
         );
         suite.bind(Shared(Arc::clone(&listener)));
