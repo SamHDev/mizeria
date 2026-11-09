@@ -50,10 +50,7 @@ impl Tags {
 
     /// Whether the expression matches the given tag names (including leading `@`).
     pub fn matches(&self, tags: impl IntoIterator<Item = impl AsRef<str>>) -> bool {
-        let set: HashSet<String> = tags
-            .into_iter()
-            .map(|t| t.as_ref().to_owned())
-            .collect();
+        let set: HashSet<String> = tags.into_iter().map(|t| t.as_ref().to_owned()).collect();
         self.expr.eval(&set)
     }
 }
@@ -233,11 +230,9 @@ fn parse_expression(text: &str) -> Result<Expr, TagExpressionError> {
                 }
                 Op::And | Op::Or => {
                     ensure_expected(Expect::Operator, expected, last_part, &parts, index)?;
-                    while operations
-                        .last()
-                        .copied()
-                        .is_some_and(|top| is_infix_or_not(top) && op.has_lower_precedence_than(top))
-                    {
+                    while operations.last().copied().is_some_and(|top| {
+                        is_infix_or_not(top) && op.has_lower_precedence_than(top)
+                    }) {
                         let top = operations.pop().unwrap();
                         push_expression(top, &mut expressions)?;
                     }
@@ -306,9 +301,7 @@ fn error_at(message: &str, parts: &[String], error_index: usize) -> TagExpressio
     let pos = "Expression: ".len() + good.len() + if good.is_empty() { 0 } else { 1 };
     let expression = parts.join(" ");
     let marker = format!("{}^{}", "_".repeat(pos), " (HERE)");
-    TagExpressionError::new(format!(
-        "{message}\nExpression: {expression}\n{marker}"
-    ))
+    TagExpressionError::new(format!("{message}\nExpression: {expression}\n{marker}"))
 }
 
 fn push_expression(op: Op, expressions: &mut Vec<Expr>) -> Result<(), TagExpressionError> {
@@ -322,9 +315,9 @@ fn push_expression(op: Op, expressions: &mut Vec<Expr>) -> Result<(), TagExpress
             expressions.push(Expr::And(Box::new(a), Box::new(b)));
         }
         Op::Not => {
-            let term = expressions.pop().ok_or_else(|| {
-                TagExpressionError::new("not: Too few operands")
-            })?;
+            let term = expressions
+                .pop()
+                .ok_or_else(|| TagExpressionError::new("not: Too few operands"))?;
             expressions.push(Expr::Not(Box::new(term)));
         }
         Op::OpenParen => {
@@ -336,9 +329,7 @@ fn push_expression(op: Op, expressions: &mut Vec<Expr>) -> Result<(), TagExpress
 
 fn pop_two(expressions: &mut Vec<Expr>, op: &str) -> Result<(Expr, Expr), TagExpressionError> {
     if expressions.len() < 2 {
-        return Err(TagExpressionError::new(format!(
-            "{op}: Too few operands"
-        )));
+        return Err(TagExpressionError::new(format!("{op}: Too few operands")));
     }
     let b = expressions.pop().unwrap();
     let a = expressions.pop().unwrap();

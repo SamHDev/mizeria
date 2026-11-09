@@ -9,21 +9,21 @@ pub use crate::entity::{
     NamedMut, NamedRef, Put, PutNamed, Remove, RemoveNamed,
 };
 pub use crate::extract::{
-    parse_from_str, Ctx, CtxMut, CtxRef, DataTable, DocString, FromCapture, FromRow, FromStep,
-    Param, StepArgument, StepContext,
+    Ctx, CtxMut, CtxRef, DataTable, DocString, FromCapture, FromRow, FromStep, Param, StepArgument,
+    StepContext, parse_from_str,
 };
 pub use crate::features::{Features, FeaturesBuilder, LoadedDocument};
-pub use crate::handler::{call, Call, Handler, IntoStepFuture};
+pub use crate::handler::{Call, Handler, IntoStepFuture, call};
+#[cfg(feature = "json")]
+pub use crate::listener::JsonReporter;
 pub use crate::listener::{
-    ASCIISyncPrinter, FeatureEvent, Joined, Listener, Printer, RuleEvent, ScenarioEvent,
-    StepEvent, StepResult,
+    ASCIISyncPrinter, FeatureEvent, Joined, Listener, Printer, RuleEvent, ScenarioEvent, StepEvent,
+    StepResult,
 };
 #[cfg(feature = "colour")]
 pub use crate::listener::{Colour, ColourSyncPrinter};
-#[cfg(feature = "json")]
-pub use crate::listener::JsonReporter;
 pub use crate::loader::{
-    discover_feature_paths, load_feature_sources, read_feature_sources, FeatureSource, LoadError,
+    FeatureSource, LoadError, discover_feature_paths, load_feature_sources, read_feature_sources,
 };
 pub use crate::lock::{LockError, Locked, ReadGuard, WriteGuard};
 pub use crate::outcome::Outcome;
@@ -32,8 +32,8 @@ pub use crate::response::{
     StepOutcome,
 };
 pub use crate::statement::{
-    re, CaptureBag, CaptureBagView, Captures, Const, EmptyCaptures, Regex, RegexCaptures,
-    SliceCaptures, Statement,
+    CaptureBag, CaptureBagView, Captures, Const, EmptyCaptures, Regex, RegexCaptures,
+    SliceCaptures, Statement, re,
 };
 pub use crate::suite::{StepKeyword, Suite};
 pub use crate::tags::{TagExpressionError, Tags, TagsBuilder};

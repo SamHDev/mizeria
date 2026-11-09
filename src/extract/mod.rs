@@ -10,7 +10,7 @@ mod row;
 
 pub use argument::{DataTable, DocString};
 pub use ctx::{Ctx, CtxMut, CtxRef};
-pub use param::{parse_from_str, FromCapture, Param};
+pub use param::{FromCapture, Param, parse_from_str};
 pub use row::FromRow;
 
 use std::convert::Infallible;

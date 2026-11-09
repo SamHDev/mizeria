@@ -26,11 +26,7 @@ impl<'s, C> FromStep<'s, C> for Currency {
     }
 }
 
-fn withdraw(
-    mut world: CtxMut<World>,
-    person: String,
-    amount: Currency,
-) -> Result<(), StepError> {
+fn withdraw(mut world: CtxMut<World>, person: String, amount: Currency) -> Result<(), StepError> {
     let balance = world.balances.entry(person).or_default();
     match balance.checked_sub(amount.0) {
         Some(next) => {
@@ -57,10 +53,7 @@ async fn withdraw_with_world_mut() {
 
     let outcome = call(withdraw, ctx).await;
     assert!(matches!(outcome, StepOutcome::Ok));
-    assert_eq!(
-        world.try_read().unwrap().balances.get("Alice"),
-        Some(&375)
-    );
+    assert_eq!(world.try_read().unwrap().balances.get("Alice"), Some(&375));
 }
 
 #[tokio::test]
@@ -123,12 +116,7 @@ async fn result_param_absorbs_parse_errors() {
     let world = Locked::new(World::default());
     let mut entities = EntityBag::new();
     let captures = ["abc"];
-    let ctx = StepContext::new(
-        world,
-        &mut entities,
-        SliceCaptures::new(&captures),
-        None,
-    );
+    let ctx = StepContext::new(world, &mut entities, SliceCaptures::new(&captures), None);
     let outcome = call(maybe, ctx).await;
     assert!(matches!(outcome, StepOutcome::Ok));
 }
@@ -192,12 +180,7 @@ async fn bare_std_from_str_params() {
     let world = Locked::new(World::default());
     let mut entities = EntityBag::new();
     let captures = ["2", "3"];
-    let ctx = StepContext::new(
-        world,
-        &mut entities,
-        SliceCaptures::new(&captures),
-        None,
-    );
+    let ctx = StepContext::new(world, &mut entities, SliceCaptures::new(&captures), None);
     let outcome = call(add_ok, ctx).await;
     assert!(matches!(outcome, StepOutcome::Ok));
 }
@@ -211,12 +194,7 @@ async fn async_handler_body() {
     let world = Locked::new(World::default());
     let mut entities = EntityBag::new();
     let captures = ["bob"];
-    let ctx = StepContext::new(
-        world,
-        &mut entities,
-        SliceCaptures::new(&captures),
-        None,
-    );
+    let ctx = StepContext::new(world, &mut entities, SliceCaptures::new(&captures), None);
     let outcome = call(greets, ctx).await;
     assert!(matches!(outcome, StepOutcome::Ok));
 }
@@ -232,12 +210,7 @@ async fn owned_handler_trait_object_style() {
     let world = Locked::new(World::default());
     let mut entities = EntityBag::new();
     let captures = ["2", "3"];
-    let ctx = StepContext::new(
-        world,
-        &mut entities,
-        SliceCaptures::new(&captures),
-        None,
-    );
+    let ctx = StepContext::new(world, &mut entities, SliceCaptures::new(&captures), None);
     let outcome = <fn(u32, u32) as Handler<(u32, u32), World>>::call(add_ok, ctx).await;
     assert!(matches!(outcome, StepOutcome::Ok));
 }
@@ -247,12 +220,7 @@ fn currency_float_to_cents() {
     let world = Locked::new(World::default());
     let mut entities = EntityBag::new();
     let captures = ["12.34"];
-    let mut ctx = StepContext::new(
-        world,
-        &mut entities,
-        SliceCaptures::new(&captures),
-        None,
-    );
+    let mut ctx = StepContext::new(world, &mut entities, SliceCaptures::new(&captures), None);
     let Currency(cents) = Currency::from_step(&mut ctx).unwrap();
     assert_eq!(cents, 1234);
 }
@@ -277,12 +245,7 @@ async fn custom_from_str_via_param() {
     let world = Locked::new(World::default());
     let mut entities = EntityBag::new();
     let captures = ["red"];
-    let ctx = StepContext::new(
-        world,
-        &mut entities,
-        SliceCaptures::new(&captures),
-        None,
-    );
+    let ctx = StepContext::new(world, &mut entities, SliceCaptures::new(&captures), None);
     assert!(matches!(call(paint, ctx).await, StepOutcome::Ok));
 }
 

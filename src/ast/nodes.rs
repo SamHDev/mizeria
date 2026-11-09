@@ -179,7 +179,11 @@ impl<'s> DocString<'s> {
             if i > 0 {
                 out.push('\n');
             }
-            if line.len() >= indent && line.as_bytes()[..indent].iter().all(u8::is_ascii_whitespace) {
+            if line.len() >= indent
+                && line.as_bytes()[..indent]
+                    .iter()
+                    .all(u8::is_ascii_whitespace)
+            {
                 out.push_str(&line[indent..]);
             } else {
                 out.push_str(line.trim_start());
@@ -340,7 +344,11 @@ impl Scenario<'_> {
             name: own_cow(self.name),
             description: own_cow(self.description),
             steps: self.steps.into_iter().map(Step::into_owned).collect(),
-            examples: self.examples.into_iter().map(Examples::into_owned).collect(),
+            examples: self
+                .examples
+                .into_iter()
+                .map(Examples::into_owned)
+                .collect(),
         }
     }
 }

@@ -54,12 +54,10 @@ impl EntityBag {
         K: EntityKey,
     {
         let id = (TypeId::of::<T>(), TypeId::of::<K>());
-        self.maps
-            .get_mut(&id)
-            .map(|m| {
-                m.downcast_mut::<HashMap<K, Locked<Box<dyn Any + Send + Sync>>>>()
-                    .expect("entity map type mismatch")
-            })
+        self.maps.get_mut(&id).map(|m| {
+            m.downcast_mut::<HashMap<K, Locked<Box<dyn Any + Send + Sync>>>>()
+                .expect("entity map type mismatch")
+        })
     }
 
     fn slot<T, K>(&self, key: &K) -> Option<&Locked<Box<dyn Any + Send + Sync>>>

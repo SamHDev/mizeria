@@ -117,10 +117,7 @@ impl<'s> Parser<'s> {
         if self.check(TokenKind::Language) {
             let tok = self.advance();
             let dialect = Dialect::get(tok.text).ok_or_else(|| {
-                ParseError::new(
-                    tok.location,
-                    format!("unsupported language '{}'", tok.text),
-                )
+                ParseError::new(tok.location, format!("unsupported language '{}'", tok.text))
             })?;
             self.dialect = dialect;
             language = dialect.code;
@@ -464,10 +461,7 @@ impl<'s> Parser<'s> {
                     let save = self.index;
                     self.advance();
                     self.skip_empty();
-                    if matches!(
-                        self.peek().kind,
-                        TokenKind::Other | TokenKind::Comment
-                    ) {
+                    if matches!(self.peek().kind, TokenKind::Other | TokenKind::Comment) {
                         // empty inside description — record as blank line in parts
                         parts.push("");
                         contiguous = false;
@@ -492,7 +486,8 @@ impl<'s> Parser<'s> {
             return Ok(Cow::Borrowed(""));
         }
 
-        if contiguous && !saw_comment
+        if contiguous
+            && !saw_comment
             && let Some(start) = first_start
         {
             // Include newlines between lines in the contiguous slice

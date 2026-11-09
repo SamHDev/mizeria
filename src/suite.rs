@@ -10,9 +10,7 @@ use crate::entity::EntityBag;
 use crate::extract::{StepArgument, StepContext};
 use crate::features::{Features, LoadedDocument};
 use crate::handler::Handler;
-use crate::listener::{
-    FeatureEvent, Listener, RuleEvent, ScenarioEvent, StepEvent, StepResult,
-};
+use crate::listener::{FeatureEvent, Listener, RuleEvent, ScenarioEvent, StepEvent, StepResult};
 use crate::lock::Locked;
 use crate::outcome::Outcome;
 use crate::response::StepOutcome;
@@ -270,11 +268,8 @@ impl<W> Suite<W> {
         outcome
     }
 
-    async fn run_document(
-        &mut self,
-        doc: &LoadedDocument,
-        outcome: &mut Outcome,
-    ) where
+    async fn run_document(&mut self, doc: &LoadedDocument, outcome: &mut Outcome)
+    where
         W: Send + Sync + 'static,
     {
         let feature: &Feature<'static> = &doc.feature;
@@ -298,8 +293,7 @@ impl<W> Suite<W> {
                     feature_bg = Some(bg);
                 }
                 FeatureChild::Scenario(scenario) => {
-                    self.run_scenario(feature_bg, None, scenario, outcome)
-                        .await;
+                    self.run_scenario(feature_bg, None, scenario, outcome).await;
                 }
                 FeatureChild::Rule(rule) => {
                     let rule_event = RuleEvent {
@@ -671,10 +665,7 @@ mod tests {
 
     #[test]
     fn runs_feature_with_background_and_steps() {
-        let dir = std::env::temp_dir().join(format!(
-            "cutecumber-suite-{}",
-            std::process::id()
-        ));
+        let dir = std::env::temp_dir().join(format!("cutecumber-suite-{}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
         let feature = write_feature(
             &dir,
@@ -722,18 +713,17 @@ Feature: Cukes
         let guard = listener.lock().unwrap();
         assert!(guard.started);
         assert_eq!(guard.scenarios_started, 1);
-        assert!(guard
-            .steps_finished
-            .iter()
-            .all(|r| matches!(r, StepResult::Passed)));
+        assert!(
+            guard
+                .steps_finished
+                .iter()
+                .all(|r| matches!(r, StepResult::Passed))
+        );
     }
 
     #[test]
     fn undefined_step_marks_scenario() {
-        let dir = std::env::temp_dir().join(format!(
-            "cutecumber-undef-{}",
-            std::process::id()
-        ));
+        let dir = std::env::temp_dir().join(format!("cutecumber-undef-{}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
         let feature = write_feature(
             &dir,
@@ -779,10 +769,7 @@ Feature: X
     fn init_seeds_entity_bag_before_steps() {
         use crate::entity::{Get, Put};
 
-        let dir = std::env::temp_dir().join(format!(
-            "cutecumber-init-{}",
-            std::process::id()
-        ));
+        let dir = std::env::temp_dir().join(format!("cutecumber-init-{}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
         let feature = write_feature(
             &dir,
@@ -813,10 +800,7 @@ Feature: Init
     fn failing_init_fails_scenario_and_skips_steps() {
         use crate::response::StepError;
 
-        let dir = std::env::temp_dir().join(format!(
-            "cutecumber-init-fail-{}",
-            std::process::id()
-        ));
+        let dir = std::env::temp_dir().join(format!("cutecumber-init-fail-{}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
         let feature = write_feature(
             &dir,

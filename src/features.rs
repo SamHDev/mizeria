@@ -3,9 +3,7 @@
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
-use crate::ast::{
-    self, Feature, FeatureChild, Rule, RuleChild, Scenario, Tag,
-};
+use crate::ast::{self, Feature, FeatureChild, Rule, RuleChild, Scenario, Tag};
 use crate::loader::{self, LoadError};
 use crate::tags::Tags;
 
@@ -57,7 +55,7 @@ impl Features {
         self
     }
 
-    fn prune(&mut self, keep: impl Fn(&[ &str ]) -> bool) {
+    fn prune(&mut self, keep: impl Fn(&[&str]) -> bool) {
         self.documents
             .retain_mut(|doc| prune_feature(&mut doc.feature, &keep));
     }
@@ -182,17 +180,14 @@ fn prune_feature(feature: &mut Feature<'static>, keep: &impl Fn(&[&str]) -> bool
     let feature_tags = tag_names(&feature.tags);
     feature.children.retain_mut(|child| match child {
         FeatureChild::Background(_) => true,
-        FeatureChild::Scenario(scenario) => {
-            prune_scenario(scenario, &feature_tags, &[], keep)
-        }
+        FeatureChild::Scenario(scenario) => prune_scenario(scenario, &feature_tags, &[], keep),
         FeatureChild::Rule(rule) => prune_rule(rule, &feature_tags, keep),
     });
 
-    let has_runnable = feature.children.iter().any(|child| match child {
+    feature.children.iter().any(|child| match child {
         FeatureChild::Scenario(_) | FeatureChild::Rule(_) => true,
         FeatureChild::Background(_) => false,
-    });
-    has_runnable
+    })
 }
 
 fn prune_rule(
@@ -203,12 +198,12 @@ fn prune_rule(
     let rule_tags = tag_names(&rule.tags);
     rule.children.retain_mut(|child| match child {
         RuleChild::Background(_) => true,
-        RuleChild::Scenario(scenario) => {
-            prune_scenario(scenario, feature_tags, &rule_tags, keep)
-        }
+        RuleChild::Scenario(scenario) => prune_scenario(scenario, feature_tags, &rule_tags, keep),
     });
 
-    rule.children.iter().any(|child| matches!(child, RuleChild::Scenario(_)))
+    rule.children
+        .iter()
+        .any(|child| matches!(child, RuleChild::Scenario(_)))
 }
 
 fn prune_scenario(
@@ -292,10 +287,7 @@ mod tests {
 
     #[test]
     fn include_and_exclude_prune_in_place() {
-        let dir = std::env::temp_dir().join(format!(
-            "cutecumber-tags-{}",
-            std::process::id()
-        ));
+        let dir = std::env::temp_dir().join(format!("cutecumber-tags-{}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
         let path = write_feature(
             &dir,
@@ -335,10 +327,7 @@ Feature: Tagged
 
     #[test]
     fn inherits_feature_and_rule_tags() {
-        let dir = std::env::temp_dir().join(format!(
-            "cutecumber-inherit-{}",
-            std::process::id()
-        ));
+        let dir = std::env::temp_dir().join(format!("cutecumber-inherit-{}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
         let path = write_feature(
             &dir,
@@ -369,10 +358,7 @@ Feature: Epic
 
     #[test]
     fn filters_examples_blocks() {
-        let dir = std::env::temp_dir().join(format!(
-            "cutecumber-ex-{}",
-            std::process::id()
-        ));
+        let dir = std::env::temp_dir().join(format!("cutecumber-ex-{}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
         let path = write_feature(
             &dir,
@@ -407,19 +393,13 @@ Feature: Outline
     }
 
     fn feature_uris(features: &Features) -> Vec<String> {
-        features
-            .documents()
-            .iter()
-            .map(|d| d.uri.clone())
-            .collect()
+        features.documents().iter().map(|d| d.uri.clone()).collect()
     }
 
     #[test]
     fn include_and_exclude_path_filter_discovered_files() {
-        let dir = std::env::temp_dir().join(format!(
-            "cutecumber-path-filter-{}",
-            std::process::id()
-        ));
+        let dir =
+            std::env::temp_dir().join(format!("cutecumber-path-filter-{}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
         let smoke_dir = dir.join("smoke");
         let wip_dir = dir.join("wip");

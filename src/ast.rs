@@ -36,4 +36,4 @@ pub use dialect::Dialect;
 pub use error::ParseError;
 pub use location::{Location, Span};
 pub use nodes::*;
-pub use parser::{parse, parse_with, unescape_owned, ParseOptions};
+pub use parser::{ParseOptions, parse, parse_with, unescape_owned};

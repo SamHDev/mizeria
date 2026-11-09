@@ -80,9 +80,7 @@ impl Dialect {
     ) -> Option<(&'k str, &'a str)> {
         let mut best: Option<(&'k str, &'a str)> = None;
         for &kw in keywords {
-            if line.starts_with(kw)
-                && best.map(|(b, _)| kw.len() > b.len()).unwrap_or(true)
-            {
+            if line.starts_with(kw) && best.map(|(b, _)| kw.len() > b.len()).unwrap_or(true) {
                 best = Some((kw, line[kw.len()..].trim_end()));
             }
         }
@@ -127,10 +125,7 @@ impl Dialect {
     }
 
     /// Match a step keyword line, returning `(type, keyword, remainder)`.
-    pub fn match_step<'a>(
-        &self,
-        line: &'a str,
-    ) -> Option<(KeywordType, &'static str, &'a str)> {
+    pub fn match_step<'a>(&self, line: &'a str) -> Option<(KeywordType, &'static str, &'a str)> {
         let candidates = [
             (KeywordType::Context, self.given),
             (KeywordType::Action, self.when),

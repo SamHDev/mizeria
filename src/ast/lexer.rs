@@ -276,7 +276,9 @@ fn next_line(source: &str, offset: usize) -> (&str, usize) {
 }
 
 fn leading_whitespace_width(line: &str) -> usize {
-    line.bytes().take_while(|&b| b == b' ' || b == b'\t').count()
+    line.bytes()
+        .take_while(|&b| b == b' ' || b == b'\t')
+        .count()
 }
 
 fn parse_language_header(rest: &str) -> Option<&str> {
@@ -305,11 +307,7 @@ fn is_docstring_separator_line(trimmed: &str, sep: &str) -> bool {
 
 fn media_type_after_separator<'s>(trimmed: &'s str, sep: &str) -> Option<&'s str> {
     let rest = trimmed[sep.len()..].trim();
-    if rest.is_empty() {
-        None
-    } else {
-        Some(rest)
-    }
+    if rest.is_empty() { None } else { Some(rest) }
 }
 
 fn parse_tags(

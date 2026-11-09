@@ -102,8 +102,7 @@ impl<W: Write + Send> Listener for JsonReporter<W> {
             .take()
             .map(|started| started.elapsed().as_nanos())
             .unwrap_or(0);
-        self.buffer
-            .on_step_finished(event, result, duration_nanos);
+        self.buffer.on_step_finished(event, result, duration_nanos);
     }
 
     fn on_run_finished(&mut self, _outcome: &Outcome) {
@@ -173,11 +172,7 @@ impl JsonFeature {
         let mut elements = Vec::new();
 
         for scenario in &feature.scenarios {
-            elements.push(JsonElement::from_scenario(
-                &feature_id,
-                None,
-                scenario,
-            ));
+            elements.push(JsonElement::from_scenario(&feature_id, None, scenario));
         }
 
         for rule in &feature.rules {
@@ -204,11 +199,7 @@ impl JsonFeature {
 }
 
 impl JsonElement {
-    fn from_scenario(
-        feature_id: &str,
-        rule_name: Option<&str>,
-        scenario: &ScenarioRecord,
-    ) -> Self {
+    fn from_scenario(feature_id: &str, rule_name: Option<&str>, scenario: &ScenarioRecord) -> Self {
         let scenario_id = kebab(&scenario.name);
         let id = match rule_name {
             Some(rule) => format!("{feature_id}/{};{scenario_id}", kebab(rule)),
@@ -333,8 +324,7 @@ mod tests {
         });
         reporter.on_run_finished(&Outcome::default());
 
-        let value: serde_json::Value =
-            serde_json::from_slice(&reporter.into_inner()).unwrap();
+        let value: serde_json::Value = serde_json::from_slice(&reporter.into_inner()).unwrap();
         let feature = &value[0];
         assert_eq!(feature["uri"], "features/cukes.feature");
         assert_eq!(feature["id"], "cukes");
@@ -403,8 +393,7 @@ mod tests {
         });
         reporter.on_run_finished(&Outcome::default());
 
-        let value: serde_json::Value =
-            serde_json::from_slice(&reporter.into_inner()).unwrap();
+        let value: serde_json::Value = serde_json::from_slice(&reporter.into_inner()).unwrap();
         let element = &value[0]["elements"][0];
         assert_eq!(element["name"], "Refunds full refund");
         assert_eq!(element["id"], "billing/refunds;full-refund");

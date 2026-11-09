@@ -2,7 +2,7 @@
 
 use std::future::Future;
 
-use crate::extract::{rejection_to_outcome, FromStep, StepContext};
+use crate::extract::{FromStep, StepContext, rejection_to_outcome};
 use crate::response::{IntoStepResult, StepError, StepOutcome};
 
 mod private {
@@ -105,8 +105,12 @@ impl_handler!(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11);
 impl_handler!(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12);
 impl_handler!(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13);
 impl_handler!(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14);
-impl_handler!(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15);
-impl_handler!(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16);
+impl_handler!(
+    T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15
+);
+impl_handler!(
+    T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16
+);
 
 /// Invoke a step function with extractors that may borrow from the context.
 ///
@@ -172,5 +176,9 @@ impl_call!(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11);
 impl_call!(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12);
 impl_call!(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13);
 impl_call!(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14);
-impl_call!(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15);
-impl_call!(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16);
+impl_call!(
+    T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15
+);
+impl_call!(
+    T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16
+);

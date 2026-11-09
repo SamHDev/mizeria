@@ -56,21 +56,21 @@ pub use entity::{
     NamedMut, NamedRef, Put, PutNamed, Remove, RemoveNamed,
 };
 pub use extract::{
-    parse_from_str, Ctx, CtxMut, CtxRef, DataTable, DocString, FromCapture, FromRow, FromStep,
-    Param, StepArgument, StepContext,
+    Ctx, CtxMut, CtxRef, DataTable, DocString, FromCapture, FromRow, FromStep, Param, StepArgument,
+    StepContext, parse_from_str,
 };
 pub use features::{Features, FeaturesBuilder, LoadedDocument};
-pub use handler::{call, Call, Handler, IntoStepFuture};
+pub use handler::{Call, Handler, IntoStepFuture, call};
+#[cfg(feature = "json")]
+pub use listener::JsonReporter;
 pub use listener::{
-    ASCIISyncPrinter, FeatureEvent, Joined, Listener, Printer, RuleEvent, ScenarioEvent,
-    StepEvent, StepResult,
+    ASCIISyncPrinter, FeatureEvent, Joined, Listener, Printer, RuleEvent, ScenarioEvent, StepEvent,
+    StepResult,
 };
 #[cfg(feature = "colour")]
 pub use listener::{Colour, ColourSyncPrinter};
-#[cfg(feature = "json")]
-pub use listener::JsonReporter;
 pub use loader::{
-    discover_feature_paths, load_feature_sources, read_feature_sources, FeatureSource, LoadError,
+    FeatureSource, LoadError, discover_feature_paths, load_feature_sources, read_feature_sources,
 };
 pub use lock::{LockError, Locked, ReadGuard, WriteGuard};
 pub use outcome::Outcome;
@@ -79,8 +79,8 @@ pub use response::{
     StepOutcome,
 };
 pub use statement::{
-    re, CaptureBag, CaptureBagView, Captures, Const, EmptyCaptures, Regex, RegexCaptures,
-    SliceCaptures, Statement,
+    CaptureBag, CaptureBagView, Captures, Const, EmptyCaptures, Regex, RegexCaptures,
+    SliceCaptures, Statement, re,
 };
 pub use suite::{StepKeyword, Suite};
 pub use tags::{TagExpressionError, Tags, TagsBuilder};

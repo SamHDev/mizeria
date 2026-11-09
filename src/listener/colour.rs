@@ -9,11 +9,9 @@ use console::Style;
 use crate::outcome::Outcome;
 
 use super::buffer::{
-    plural, tally_scenarios, FeatureRecord, ReportBuffer, ScenarioRecord, StepRecord,
+    FeatureRecord, ReportBuffer, ScenarioRecord, StepRecord, plural, tally_scenarios,
 };
-use super::{
-    FeatureEvent, Listener, RuleEvent, ScenarioEvent, StepEvent, StepResult,
-};
+use super::{FeatureEvent, Listener, RuleEvent, ScenarioEvent, StepEvent, StepResult};
 
 /// Policy for whether ANSI colours are applied to printer output.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -349,11 +347,7 @@ fn write_step<W: Write>(
             writeln!(writer, "{}", styles.err(line))?;
             for line in message.lines() {
                 let prefix = if symbols { "   " } else { "  " };
-                writeln!(
-                    writer,
-                    "{}",
-                    styles.err(format!("{indent}{prefix}{line}"))
-                )?;
+                writeln!(writer, "{}", styles.err(format!("{indent}{prefix}{line}")))?;
             }
         }
         StepResult::Skipped => {

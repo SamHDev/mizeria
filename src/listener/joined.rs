@@ -2,9 +2,7 @@
 
 use crate::outcome::Outcome;
 
-use super::{
-    FeatureEvent, Listener, RuleEvent, ScenarioEvent, StepEvent, StepResult,
-};
+use super::{FeatureEvent, Listener, RuleEvent, ScenarioEvent, StepEvent, StepResult};
 
 /// Fan-out listener that forwards every hook to both children (left, then right).
 ///
@@ -137,8 +135,8 @@ mod tests {
 
         joined.on_run_started();
 
-        assert_eq!(joined.0 .0.events, ["run_started"]);
-        assert_eq!(joined.0 .1.events, ["run_started"]);
+        assert_eq!(joined.0.0.events, ["run_started"]);
+        assert_eq!(joined.0.1.events, ["run_started"]);
         assert_eq!(joined.1.events, ["run_started"]);
     }
 }

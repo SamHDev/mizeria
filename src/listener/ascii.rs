@@ -5,11 +5,9 @@ use std::io::{self, Write};
 use crate::outcome::Outcome;
 
 use super::buffer::{
-    plural, tally_scenarios, FeatureRecord, ReportBuffer, ScenarioRecord, StepRecord,
+    FeatureRecord, ReportBuffer, ScenarioRecord, StepRecord, plural, tally_scenarios,
 };
-use super::{
-    FeatureEvent, Listener, RuleEvent, ScenarioEvent, StepEvent, StepResult,
-};
+use super::{FeatureEvent, Listener, RuleEvent, ScenarioEvent, StepEvent, StepResult};
 
 /// Buffers suite events and writes an ASCII report when the run finishes.
 ///
