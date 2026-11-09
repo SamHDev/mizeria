@@ -515,10 +515,10 @@ impl<W> Suite<W> {
 
         let argument = if let Some(doc) = step.doc_string.as_ref() {
             Some(StepArgument::DocString(doc.as_ref()))
-        } else if let Some(table) = step.table.as_ref() {
-            Some(StepArgument::DataTable(table.as_slice()))
         } else {
-            None
+            step.table
+                .as_ref()
+                .map(|table| StepArgument::DataTable(table.as_slice()))
         };
 
         let ctx = StepContext::new(world.clone(), entities, captures.view(), argument);

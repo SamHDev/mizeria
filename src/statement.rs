@@ -286,11 +286,11 @@ impl Statement for Regex {
         // Map regex group index → index in `groups` (unmatched optionals omitted).
         let mut index_map = vec![None; self.inner.captures_len()];
 
-        for i in 1..self.inner.captures_len() {
+        for (i, mapped) in index_map.iter_mut().enumerate().skip(1) {
             let Some(m) = caps.get(i) else {
                 continue;
             };
-            index_map[i] = Some(groups.len());
+            *mapped = Some(groups.len());
             groups.push(m.as_str());
         }
 

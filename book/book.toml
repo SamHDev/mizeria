@@ -9,3 +9,6 @@ build-dir = "html"
 
 [output.html]
 default-theme = "light"
+site-url = "/mizeria/"
+git-repository-url = "https://github.com/samhdev/mizeria"
+edit-url-template = "https://github.com/samhdev/mizeria/edit/main/book/src/{path}"

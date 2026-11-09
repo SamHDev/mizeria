@@ -398,8 +398,7 @@ Feature: Outline
 
     #[test]
     fn include_and_exclude_path_filter_discovered_files() {
-        let dir =
-            std::env::temp_dir().join(format!("mizeria-path-filter-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("mizeria-path-filter-{}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
         let smoke_dir = dir.join("smoke");
         let wip_dir = dir.join("wip");
