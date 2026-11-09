@@ -25,8 +25,8 @@ use crate::statement::Captures;
 pub enum StepArgument<'s> {
     /// Triple-quoted docstring body.
     DocString(&'s str),
-    /// Row-major table: each inner slice is one row of cell strings.
-    DataTable(&'s [&'s [&'s str]]),
+    /// Row-major table of owned cell strings (from the runnable step).
+    DataTable(&'s [Vec<String>]),
 }
 
 /// Mutable view of one step invocation, analogous to an HTTP request in Axum.

@@ -5,11 +5,13 @@ use std::future::Future;
 use std::marker::PhantomData;
 use std::pin::Pin;
 
-use crate::ast::{Background, Feature, FeatureChild, Location, RuleChild, Scenario, Step};
+use crate::ast::{
+    Background, Feature, FeatureChild, KeywordType, Location, RuleChild, Scenario, Step,
+};
 use crate::entity::EntityBag;
 use crate::extract::{StepArgument, StepContext};
 use crate::features::{Features, LoadedDocument};
-use crate::handler::Handler;
+use crate::handler::{Handler, HandlerMarker};
 use crate::listener::{FeatureEvent, Listener, RuleEvent, ScenarioEvent, StepEvent, StepResult};
 use crate::lock::Locked;
 use crate::outcome::Outcome;
@@ -29,18 +31,52 @@ pub enum StepKeyword {
     Step,
 }
 
+impl StepKeyword {
+    fn from_keyword_type(ty: KeywordType) -> Option<Self> {
+        match ty {
+            KeywordType::Context => Some(Self::Given),
+            KeywordType::Action => Some(Self::When),
+            KeywordType::Outcome => Some(Self::Then),
+            KeywordType::Conjunction | KeywordType::Unknown => None,
+        }
+    }
+
+    fn matches_binding(self, binding: StepKeyword) -> bool {
+        match binding {
+            StepKeyword::Step => true,
+            other => other == self,
+        }
+    }
+}
+
+/// Sync or async step invocation without boxing sync handlers.
+enum StepDispatch<'a> {
+    Done(StepOutcome),
+    Pending(Pin<Box<dyn Future<Output = StepOutcome> + 'a>>),
+}
+
+impl StepDispatch<'_> {
+    async fn into_outcome(self) -> StepOutcome {
+        match self {
+            Self::Done(outcome) => outcome,
+            Self::Pending(fut) => fut.await,
+        }
+    }
+}
+
 trait DynStep<W>: Send + Sync {
+    fn keyword(&self) -> StepKeyword;
+
     fn matches(&self, text: &str) -> Option<CaptureBag>;
 
-    fn invoke<'a>(
-        &'a self,
-        ctx: StepContext<'a, W>,
-    ) -> Pin<Box<dyn Future<Output = StepOutcome> + 'a>>;
+    fn run<'a>(&'a self, ctx: StepContext<'a, W>) -> StepDispatch<'a>;
 }
 
 struct StepBinding<S, H, T, M> {
     statement: S,
     handler: H,
+    keyword: StepKeyword,
+    sync: bool,
     _marker: PhantomData<fn() -> (T, M)>,
 }
 
@@ -52,29 +88,31 @@ where
     M: 'static,
     W: Send + Sync + 'static,
 {
-    fn matches(&self, text: &str) -> Option<CaptureBag> {
-        let caps = self.statement.matches(text)?;
-        Some(CaptureBag::from_captures(caps))
+    fn keyword(&self) -> StepKeyword {
+        self.keyword
     }
 
-    fn invoke<'a>(
-        &'a self,
-        ctx: StepContext<'a, W>,
-    ) -> Pin<Box<dyn Future<Output = StepOutcome> + 'a>> {
+    fn matches(&self, text: &str) -> Option<CaptureBag> {
+        self.statement.match_bag(text)
+    }
+
+    fn run<'a>(&'a self, ctx: StepContext<'a, W>) -> StepDispatch<'a> {
         let handler = self.handler.clone();
-        Box::pin(async move { Handler::call(handler, ctx).await })
+        if self.sync {
+            StepDispatch::Done(pollster::block_on(Handler::call(handler, ctx)))
+        } else {
+            StepDispatch::Pending(Box::pin(async move { Handler::call(handler, ctx).await }))
+        }
     }
 }
 
 trait DynInit<W>: Send + Sync {
-    fn invoke<'a>(
-        &'a self,
-        ctx: StepContext<'a, W>,
-    ) -> Pin<Box<dyn Future<Output = StepOutcome> + 'a>>;
+    fn run<'a>(&'a self, ctx: StepContext<'a, W>) -> StepDispatch<'a>;
 }
 
 struct InitBinding<H, T, M> {
     handler: H,
+    sync: bool,
     _marker: PhantomData<fn() -> (T, M)>,
 }
 
@@ -85,12 +123,13 @@ where
     M: 'static,
     W: Send + Sync + 'static,
 {
-    fn invoke<'a>(
-        &'a self,
-        ctx: StepContext<'a, W>,
-    ) -> Pin<Box<dyn Future<Output = StepOutcome> + 'a>> {
+    fn run<'a>(&'a self, ctx: StepContext<'a, W>) -> StepDispatch<'a> {
         let handler = self.handler.clone();
-        Box::pin(async move { Handler::call(handler, ctx).await })
+        if self.sync {
+            StepDispatch::Done(pollster::block_on(Handler::call(handler, ctx)))
+        } else {
+            StepDispatch::Pending(Box::pin(async move { Handler::call(handler, ctx).await }))
+        }
     }
 }
 
@@ -137,11 +176,12 @@ impl<W> Suite<W> {
     where
         H: Handler<T, W, M> + Sync,
         T: 'static,
-        M: 'static,
+        M: HandlerMarker + 'static,
         W: Send + Sync + 'static,
     {
         self.inits.push(Box::new(InitBinding {
             handler,
+            sync: M::IS_SYNC,
             _marker: PhantomData,
         }));
         self
@@ -156,7 +196,7 @@ impl<W> Suite<W> {
         S: Statement + 'static,
         H: Handler<T, W, M> + Sync,
         T: 'static,
-        M: 'static,
+        M: HandlerMarker + 'static,
         W: Send + Sync + 'static,
     {
         self.push(StepKeyword::Given, statement, handler)
@@ -168,7 +208,7 @@ impl<W> Suite<W> {
         S: Statement + 'static,
         H: Handler<T, W, M> + Sync,
         T: 'static,
-        M: 'static,
+        M: HandlerMarker + 'static,
         W: Send + Sync + 'static,
     {
         self.push(StepKeyword::When, statement, handler)
@@ -180,7 +220,7 @@ impl<W> Suite<W> {
         S: Statement + 'static,
         H: Handler<T, W, M> + Sync,
         T: 'static,
-        M: 'static,
+        M: HandlerMarker + 'static,
         W: Send + Sync + 'static,
     {
         self.push(StepKeyword::Then, statement, handler)
@@ -192,7 +232,7 @@ impl<W> Suite<W> {
         S: Statement + 'static,
         H: Handler<T, W, M> + Sync,
         T: 'static,
-        M: 'static,
+        M: HandlerMarker + 'static,
         W: Send + Sync + 'static,
     {
         self.push(StepKeyword::Step, statement, handler)
@@ -203,13 +243,15 @@ impl<W> Suite<W> {
         S: Statement + 'static,
         H: Handler<T, W, M> + Sync,
         T: 'static,
-        M: 'static,
+        M: HandlerMarker + 'static,
         W: Send + Sync + 'static,
     {
         self.keywords.push(keyword);
         self.steps.push(Box::new(StepBinding {
             statement,
             handler,
+            keyword,
+            sync: M::IS_SYNC,
             _marker: PhantomData,
         }));
         self
@@ -374,7 +416,7 @@ impl<W> Suite<W> {
                 break;
             }
             let ctx = StepContext::new(world.clone(), &mut entities, EmptyCaptures, None);
-            match map_outcome(init.invoke(ctx).await) {
+            match map_outcome(init.run(ctx).into_outcome().await) {
                 StepResult::Passed => {}
                 StepResult::Failed { .. } => {
                     status = ScenarioStatus::Failed;
@@ -396,10 +438,15 @@ impl<W> Suite<W> {
         }
         steps.extend(scenario.steps.iter().map(|s| runnable_step(s, example)));
 
+        let mut effective_keyword: Option<StepKeyword> = None;
         for step in &steps {
+            if let Some(kw) = StepKeyword::from_keyword_type(step.keyword_type) {
+                effective_keyword = Some(kw);
+            }
+
             let step_event = StepEvent {
-                keyword: &step.keyword,
-                text: &step.text,
+                keyword: step.keyword.as_ref(),
+                text: step.text.as_ref(),
                 location: step.location,
             };
 
@@ -410,7 +457,8 @@ impl<W> Suite<W> {
             let result = if skip_rest {
                 StepResult::Skipped
             } else {
-                self.execute_step(&world, &mut entities, step).await
+                self.execute_step(&world, &mut entities, step, effective_keyword)
+                    .await
             };
 
             match &result {
@@ -446,46 +494,35 @@ impl<W> Suite<W> {
         &self,
         world: &Locked<W>,
         entities: &mut EntityBag,
-        step: &RunnableStep,
+        step: &RunnableStep<'_>,
+        effective_keyword: Option<StepKeyword>,
     ) -> StepResult
     where
         W: Send + Sync + 'static,
     {
-        let Some((binding, captures)) = self
-            .steps
-            .iter()
-            .find_map(|binding| binding.matches(&step.text).map(|caps| (binding, caps)))
-        else {
+        let Some((binding, captures)) = self.steps.iter().find_map(|binding| {
+            if let Some(kw) = effective_keyword
+                && !kw.matches_binding(binding.keyword())
+            {
+                return None;
+            }
+            binding
+                .matches(step.text.as_ref())
+                .map(|caps| (binding, caps))
+        }) else {
             return StepResult::Undefined;
         };
 
-        if let Some(doc) = step.doc_string.as_ref() {
-            let ctx = StepContext::new(
-                world.clone(),
-                entities,
-                captures.view(),
-                Some(StepArgument::DocString(doc.as_str())),
-            );
-            return map_outcome(binding.invoke(ctx).await);
-        }
+        let argument = if let Some(doc) = step.doc_string.as_ref() {
+            Some(StepArgument::DocString(doc.as_ref()))
+        } else if let Some(table) = step.table.as_ref() {
+            Some(StepArgument::DataTable(table.as_slice()))
+        } else {
+            None
+        };
 
-        if let Some(table) = step.table.as_ref() {
-            let row_vecs: Vec<Vec<&str>> = table
-                .iter()
-                .map(|row| row.iter().map(String::as_str).collect())
-                .collect();
-            let rows: Vec<&[&str]> = row_vecs.iter().map(Vec::as_slice).collect();
-            let ctx = StepContext::new(
-                world.clone(),
-                entities,
-                captures.view(),
-                Some(StepArgument::DataTable(rows.as_slice())),
-            );
-            return map_outcome(binding.invoke(ctx).await);
-        }
-
-        let ctx = StepContext::new(world.clone(), entities, captures.view(), None);
-        map_outcome(binding.invoke(ctx).await)
+        let ctx = StepContext::new(world.clone(), entities, captures.view(), argument);
+        map_outcome(binding.run(ctx).into_outcome().await)
     }
 }
 
@@ -507,38 +544,56 @@ enum ScenarioStatus {
 
 #[derive(Debug, Default)]
 struct ExampleRow {
+    /// `(needle, value)` where needle is already `"<key>"`.
     values: Vec<(String, String)>,
 }
 
 impl ExampleRow {
+    fn needs_substitution(&self) -> bool {
+        !self.values.is_empty()
+    }
+
     fn substitute<'a>(&'a self, text: &'a str) -> Cow<'a, str> {
         if self.values.is_empty() || !text.contains('<') {
             return Cow::Borrowed(text);
         }
         let mut out = text.to_owned();
-        for (key, value) in &self.values {
-            let needle = format!("<{key}>");
-            out = out.replace(&needle, value);
+        for (needle, value) in &self.values {
+            if out.contains(needle.as_str()) {
+                out = out.replace(needle.as_str(), value);
+            }
         }
         Cow::Owned(out)
     }
 }
 
 #[derive(Debug)]
-struct RunnableStep {
-    keyword: String,
-    text: String,
+struct RunnableStep<'a> {
+    keyword: Cow<'a, str>,
+    keyword_type: KeywordType,
+    text: Cow<'a, str>,
     location: Location,
-    doc_string: Option<String>,
+    doc_string: Option<Cow<'a, str>>,
     table: Option<Vec<Vec<String>>>,
 }
 
-fn runnable_step(step: &Step<'static>, example: &ExampleRow) -> RunnableStep {
-    let text = example.substitute(step.text.as_ref()).into_owned();
+fn runnable_step<'a>(step: &'a Step<'static>, example: &ExampleRow) -> RunnableStep<'a> {
+    let substitute = example.needs_substitution();
+    let text = if substitute {
+        Cow::Owned(example.substitute(step.text.as_ref()).into_owned())
+    } else {
+        Cow::Borrowed(step.text.as_ref())
+    };
+
     let doc_string = step.doc_string.as_ref().map(|doc| {
         let content = doc.content();
-        example.substitute(content.as_ref()).into_owned()
+        if substitute {
+            Cow::Owned(example.substitute(content.as_ref()).into_owned())
+        } else {
+            content
+        }
     });
+
     let table = step.data_table.as_ref().map(|table| {
         table
             .rows
@@ -546,14 +601,21 @@ fn runnable_step(step: &Step<'static>, example: &ExampleRow) -> RunnableStep {
             .map(|row| {
                 row.cells
                     .iter()
-                    .map(|cell| example.substitute(cell.value.as_ref()).into_owned())
+                    .map(|cell| {
+                        if substitute {
+                            example.substitute(cell.value.as_ref()).into_owned()
+                        } else {
+                            cell.value.as_ref().to_owned()
+                        }
+                    })
                     .collect()
             })
             .collect()
     });
 
     RunnableStep {
-        keyword: step.keyword.as_ref().to_owned(),
+        keyword: Cow::Borrowed(step.keyword.as_ref()),
+        keyword_type: step.keyword_type,
         text,
         location: step.location,
         doc_string,
@@ -571,16 +633,16 @@ fn expand_examples(scenario: &Scenario<'static>) -> Vec<ExampleRow> {
         let Some(header) = examples.table_header.as_ref() else {
             continue;
         };
-        let keys: Vec<String> = header
+        let needles: Vec<String> = header
             .cells
             .iter()
-            .map(|c| c.value.as_ref().to_owned())
+            .map(|c| format!("<{}>", c.value.as_ref()))
             .collect();
 
         for body in &examples.table_body {
             let mut values = Vec::new();
-            for (key, cell) in keys.iter().zip(body.cells.iter()) {
-                values.push((key.clone(), cell.value.as_ref().to_owned()));
+            for (needle, cell) in needles.iter().zip(body.cells.iter()) {
+                values.push((needle.clone(), cell.value.as_ref().to_owned()));
             }
             rows.push(ExampleRow { values });
         }
@@ -836,5 +898,80 @@ Feature: Fail
         suite.with_reporter(Printer::stdout());
         let outcome = suite.run(&features).await;
         assert!(outcome.is_ok());
+    }
+
+    #[test]
+    fn keyword_filter_skips_other_bindings() {
+        let dir = std::env::temp_dir().join(format!("cutecumber-kw-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        let feature = write_feature(
+            &dir,
+            "kw.feature",
+            "\
+Feature: Keywords
+  Scenario: when only
+    When I eat 1 cuke
+",
+        );
+
+        let features = Features::builder().add_path(&feature).build().unwrap();
+        let mut suite = Suite::new(new_world);
+        // Same text pattern registered under Given — must not match a When step.
+        suite.given(
+            Regex::new(r"I eat (\d+) cukes?").unwrap(),
+            |_n: u32, mut world: CtxMut<World>| {
+                world.cukes = 111;
+            },
+        );
+        suite.when(
+            Regex::new(r"I eat (\d+) cukes?").unwrap(),
+            |n: u32, mut world: CtxMut<World>| {
+                world.cukes = n;
+            },
+        );
+
+        let outcome = suite.run_blocking(&features);
+        let _ = fs::remove_dir_all(&dir);
+
+        assert!(outcome.is_ok(), "{outcome:?}");
+        assert_eq!(outcome.passed, 1);
+    }
+
+    #[test]
+    fn and_inherits_previous_keyword() {
+        let dir = std::env::temp_dir().join(format!("cutecumber-and-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        let feature = write_feature(
+            &dir,
+            "and.feature",
+            "\
+Feature: And
+  Scenario: chained
+    Given I have 2 cukes
+    And I have 3 cukes
+",
+        );
+
+        let features = Features::builder().add_path(&feature).build().unwrap();
+        let mut suite = Suite::new(new_world);
+        suite.given(
+            Regex::new(r"I have (\d+) cukes?").unwrap(),
+            |n: u32, mut world: CtxMut<World>| {
+                world.cukes = n;
+            },
+        );
+        // A When with the same pattern must not steal the And (which inherits Given).
+        suite.when(
+            Regex::new(r"I have (\d+) cukes?").unwrap(),
+            |_n: u32, mut world: CtxMut<World>| {
+                world.cukes = 999;
+            },
+        );
+
+        let outcome = suite.run_blocking(&features);
+        let _ = fs::remove_dir_all(&dir);
+
+        assert!(outcome.is_ok(), "{outcome:?}");
+        assert_eq!(outcome.passed, 1);
     }
 }

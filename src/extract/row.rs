@@ -4,10 +4,17 @@ use crate::response::RowRejection;
 
 use super::FromCapture;
 
-/// Parse one data-table row (a slice of cell strings) into a typed value.
+/// Parse one data-table row (cells as borrowed strings) into a typed value.
 pub trait FromRow<'s>: Sized {
     /// Parse `cells` left-to-right into `Self` (typically a tuple).
-    fn from_row(cells: &'s [&'s str]) -> Result<Self, RowRejection>;
+    fn from_row_iter<I>(cells: I) -> Result<Self, RowRejection>
+    where
+        I: ExactSizeIterator<Item = &'s str>;
+
+    /// Convenience for a borrowed slice of cell strings.
+    fn from_row(cells: &'s [&'s str]) -> Result<Self, RowRejection> {
+        Self::from_row_iter(cells.iter().copied())
+    }
 }
 
 macro_rules! impl_from_row {
@@ -17,7 +24,10 @@ macro_rules! impl_from_row {
             $($ty: FromCapture<'s>,)+
         {
             #[allow(non_snake_case)]
-            fn from_row(cells: &'s [&'s str]) -> Result<Self, RowRejection> {
+            fn from_row_iter<I>(mut cells: I) -> Result<Self, RowRejection>
+            where
+                I: ExactSizeIterator<Item = &'s str>,
+            {
                 let expected = [$(stringify!($ty)),+].len();
                 if cells.len() != expected {
                     return Err(RowRejection::Arity {
@@ -27,7 +37,8 @@ macro_rules! impl_from_row {
                 }
                 let mut index = 0;
                 $(
-                    let $ty = $ty::from_capture(cells[index])
+                    let raw = cells.next().expect("arity checked");
+                    let $ty = $ty::from_capture(raw)
                         .map_err(|source| RowRejection::cell(index, source))?;
                     index += 1;
                 )+

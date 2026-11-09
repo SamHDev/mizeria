@@ -22,8 +22,13 @@ serde = { version = "1", features = ["derive"], optional = true }
 serde_json = { version = "1", optional = true }
 
 [dev-dependencies]
+criterion = "0.5"
 tokio = { version = "1", features = ["macros", "rt"] }
 
 [[example]]
 name = "withdrawing_cash"
 required-features = ["prelude"]
+
+[[bench]]
+name = "hot_path"
+harness = false

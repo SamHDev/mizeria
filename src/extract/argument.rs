@@ -25,13 +25,23 @@ impl<'s, C> FromStep<'s, C> for DocString<'s> {
     }
 }
 
-/// Extractor for a step data table (row-major cell slices).
+/// Extractor for a step data table (row-major owned cell strings).
 pub struct DataTable<'s>(
-    /// Rows of cell strings, borrowed from the step context.
-    pub &'s [&'s [&'s str]],
+    /// Rows of cell strings, borrowed from the runnable step.
+    pub &'s [Vec<String>],
 );
 
 impl<'s> DataTable<'s> {
+    /// Number of rows.
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    /// Whether there are no rows.
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
     /// Iterate rows parsed into `R` (typically a tuple of [`super::FromCapture`] types).
     ///
     /// ```ignore
@@ -39,11 +49,13 @@ impl<'s> DataTable<'s> {
     ///     let (name, qty, note) = row?;
     /// }
     /// ```
-    pub fn rows<R>(&self) -> impl Iterator<Item = Result<R, RowRejection>> + 's
+    pub fn rows<R>(&'s self) -> impl Iterator<Item = Result<R, RowRejection>> + 's
     where
         R: FromRow<'s> + 's,
     {
-        self.0.iter().copied().map(R::from_row)
+        self.0
+            .iter()
+            .map(|row| R::from_row_iter(row.iter().map(String::as_str)))
     }
 }
 

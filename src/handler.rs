@@ -13,6 +13,22 @@ mod private {
     pub enum ViaFuture {}
 }
 
+/// Marker for whether a handler body is sync ([`IntoStepFuture`] via result) or async.
+///
+/// Used by the suite to skip `Box::pin` for sync handlers.
+pub trait HandlerMarker {
+    /// `true` when the handler returns a plain [`IntoStepResult`] (not a future).
+    const IS_SYNC: bool;
+}
+
+impl HandlerMarker for private::ViaResult {
+    const IS_SYNC: bool = true;
+}
+
+impl HandlerMarker for private::ViaFuture {
+    const IS_SYNC: bool = false;
+}
+
 /// Convert a handler return value into a future yielding the raw result.
 ///
 /// Marker parameter allows both plain results and futures to implement this trait.

@@ -152,13 +152,14 @@ async fn docstring_take_once() {
 #[tokio::test]
 async fn data_table_extractor() {
     fn read_table(table: DataTable<'_>) {
-        assert_eq!(table.0.len(), 2);
+        assert_eq!(table.len(), 2);
         assert_eq!(table.0[0], ["a", "b"]);
     }
 
-    let row0: &[&str] = &["a", "b"];
-    let row1: &[&str] = &["c", "d"];
-    let rows: &[&[&str]] = &[row0, row1];
+    let rows = vec![
+        vec!["a".to_owned(), "b".to_owned()],
+        vec!["c".to_owned(), "d".to_owned()],
+    ];
 
     let world = Locked::new(World::default());
     let mut entities = EntityBag::new();
@@ -166,7 +167,7 @@ async fn data_table_extractor() {
         world,
         &mut entities,
         EmptyCaptures,
-        Some(StepArgument::DataTable(rows)),
+        Some(StepArgument::DataTable(rows.as_slice())),
     );
     assert!(matches!(call(read_table, ctx).await, StepOutcome::Ok));
 }
@@ -262,9 +263,10 @@ async fn data_table_typed_rows() {
         Ok(())
     }
 
-    let row0: &[&str] = &["alice", "3", "note"];
-    let row1: &[&str] = &["bob", "1", "x"];
-    let rows: &[&[&str]] = &[row0, row1];
+    let rows = vec![
+        vec!["alice".to_owned(), "3".to_owned(), "note".to_owned()],
+        vec!["bob".to_owned(), "1".to_owned(), "x".to_owned()],
+    ];
 
     let world = Locked::new(World::default());
     let mut entities = EntityBag::new();
@@ -272,13 +274,12 @@ async fn data_table_typed_rows() {
         world,
         &mut entities,
         EmptyCaptures,
-        Some(StepArgument::DataTable(rows)),
+        Some(StepArgument::DataTable(rows.as_slice())),
     );
     assert!(matches!(call(ingest, ctx).await, StepOutcome::Ok));
 
-    let bad: &[&str] = &["only"];
-    let bad_rows: &[&[&str]] = &[bad];
-    let table = DataTable(bad_rows);
+    let bad_rows = vec![vec!["only".to_owned()]];
+    let table = DataTable(bad_rows.as_slice());
     let err = table.rows::<(&str, u32)>().next().unwrap().unwrap_err();
     assert!(matches!(
         err,
@@ -288,9 +289,8 @@ async fn data_table_typed_rows() {
         }
     ));
 
-    let bad_parse: &[&str] = &["alice", "nope"];
-    let bad_parse_rows: &[&[&str]] = &[bad_parse];
-    let table = DataTable(bad_parse_rows);
+    let bad_parse_rows = vec![vec!["alice".to_owned(), "nope".to_owned()]];
+    let table = DataTable(bad_parse_rows.as_slice());
     let err = table.rows::<(&str, u32)>().next().unwrap().unwrap_err();
     assert!(matches!(err, RowRejection::Cell { column: 1, .. }));
 }

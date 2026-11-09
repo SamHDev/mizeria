@@ -60,7 +60,7 @@ pub use extract::{
     StepContext, parse_from_str,
 };
 pub use features::{Features, FeaturesBuilder, LoadedDocument};
-pub use handler::{Call, Handler, IntoStepFuture, call};
+pub use handler::{Call, Handler, HandlerMarker, IntoStepFuture, call};
 #[cfg(feature = "json")]
 pub use listener::JsonReporter;
 pub use listener::{

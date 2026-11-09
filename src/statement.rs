@@ -45,13 +45,15 @@ impl CaptureBag {
 
     /// Preserve positional and named groups from a regex match without advancing it.
     pub fn from_regex(caps: &RegexCaptures<'_>) -> Self {
+        let mut names = HashMap::with_capacity(caps.named.len());
+        for &(idx, name) in &caps.named {
+            if let Some(value) = caps.groups.get(idx).copied() {
+                names.insert(name.to_owned(), value.to_owned());
+            }
+        }
         Self {
             groups: caps.groups.iter().map(|s| (*s).to_owned()).collect(),
-            names: caps
-                .names
-                .iter()
-                .map(|(k, v)| (k.clone(), (*v).to_owned()))
-                .collect(),
+            names,
         }
     }
 
@@ -144,8 +146,12 @@ impl<'s> Captures<'s> for SliceCaptures<'s> {
 /// Captures produced by a [`Regex`] statement match.
 #[derive(Debug, Clone)]
 pub struct RegexCaptures<'s> {
+    /// Positional groups in match order (unmatched optional groups omitted).
     groups: Vec<&'s str>,
-    names: HashMap<String, &'s str>,
+    /// `(index_into_groups, name)` for named groups that participated in the match.
+    ///
+    /// Names are borrowed from the compiled [`Regex`] (no per-match `String` alloc).
+    named: Vec<(usize, &'s str)>,
     cursor: usize,
 }
 
@@ -157,12 +163,17 @@ impl<'s> Captures<'s> for RegexCaptures<'s> {
     }
 
     fn named(&self, name: &str) -> Option<&'s str> {
-        self.names.get(name).copied()
+        self.named
+            .iter()
+            .find(|&&(_, n)| n == name)
+            .and_then(|&(idx, _)| self.groups.get(idx).copied())
     }
 
     fn for_each_named(&self, f: &mut dyn FnMut(&str, &'s str)) {
-        for (name, value) in &self.names {
-            f(name.as_str(), value);
+        for &(idx, name) in &self.named {
+            if let Some(value) = self.groups.get(idx).copied() {
+                f(name, value);
+            }
         }
     }
 }
@@ -175,7 +186,12 @@ pub trait Statement: Send + Sync {
         Self: 's;
 
     /// Return captures when `step` fully matches this statement.
-    fn matches<'s>(&self, step: &'s str) -> Option<Self::Captures<'s>>;
+    fn matches<'s>(&'s self, step: &'s str) -> Option<Self::Captures<'s>>;
+
+    /// Owned capture bag for dyn step bindings (default copies via [`CaptureBag::from_captures`]).
+    fn match_bag<'s>(&'s self, step: &'s str) -> Option<CaptureBag> {
+        self.matches(step).map(CaptureBag::from_captures)
+    }
 }
 
 /// Exact string match; produces no capture groups.
@@ -223,14 +239,21 @@ impl Statement for Const {
 #[derive(Debug, Clone)]
 pub struct Regex {
     inner: regex::Regex,
+    /// Named groups as `(regex_group_index, name)`, built once at construction.
+    named: Box<[(usize, Box<str>)]>,
 }
 
 impl Regex {
     /// Compile `pattern` as a step regex.
     pub fn new(pattern: &str) -> Result<Self, regex::Error> {
-        Ok(Self {
-            inner: regex::Regex::new(pattern)?,
-        })
+        let inner = regex::Regex::new(pattern)?;
+        let named: Box<[(usize, Box<str>)]> = inner
+            .capture_names()
+            .enumerate()
+            .skip(1)
+            .filter_map(|(i, name)| name.map(|n| (i, Box::<str>::from(n))))
+            .collect();
+        Ok(Self { inner, named })
     }
 }
 
@@ -251,32 +274,42 @@ impl Statement for Regex {
     where
         Self: 's;
 
-    fn matches<'s>(&self, step: &'s str) -> Option<RegexCaptures<'s>> {
+    fn matches<'s>(&'s self, step: &'s str) -> Option<RegexCaptures<'s>> {
         let caps = self.inner.captures(step)?;
         let full = caps.get(0)?;
         if full.start() != 0 || full.end() != step.len() {
             return None;
         }
 
-        let mut groups = Vec::new();
-        let mut names = HashMap::new();
+        let group_count = self.inner.captures_len().saturating_sub(1);
+        let mut groups = Vec::with_capacity(group_count);
+        // Map regex group index → index in `groups` (unmatched optionals omitted).
+        let mut index_map = vec![None; self.inner.captures_len()];
 
-        for (i, name) in self.inner.capture_names().enumerate().skip(1) {
+        for i in 1..self.inner.captures_len() {
             let Some(m) = caps.get(i) else {
                 continue;
             };
-            let value = m.as_str();
-            groups.push(value);
-            if let Some(name) = name {
-                names.insert(name.to_owned(), value);
+            index_map[i] = Some(groups.len());
+            groups.push(m.as_str());
+        }
+
+        let mut named = Vec::with_capacity(self.named.len());
+        for &(regex_idx, ref name) in self.named.iter() {
+            if let Some(Some(pos)) = index_map.get(regex_idx).copied() {
+                named.push((pos, name.as_ref()));
             }
         }
 
         Some(RegexCaptures {
             groups,
-            names,
+            named,
             cursor: 0,
         })
+    }
+
+    fn match_bag<'s>(&'s self, step: &'s str) -> Option<CaptureBag> {
+        self.matches(step).map(|caps| CaptureBag::from_regex(&caps))
     }
 }
 
@@ -312,8 +345,7 @@ mod tests {
     #[test]
     fn capture_bag_preserves_named_groups() {
         let stmt = Regex::new(r"I have (?P<count>\d+) cukes").unwrap();
-        let caps = stmt.matches("I have 7 cukes").unwrap();
-        let bag = CaptureBag::from_captures(caps);
+        let bag = stmt.match_bag("I have 7 cukes").unwrap();
         assert_eq!(bag.names().get("count").map(String::as_str), Some("7"));
         assert_eq!(bag.view().named("count"), Some("7"));
     }
