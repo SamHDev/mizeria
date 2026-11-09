@@ -658,9 +658,11 @@ fn expand_examples(scenario: &Scenario<'static>) -> Vec<ExampleRow> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(feature = "regex")]
     use crate::extract::CtxMut;
     use crate::listener::{Listener, Printer};
     use crate::outcome::Outcome;
+    #[cfg(feature = "regex")]
     use crate::statement::Regex;
     use std::fs;
     use std::path::PathBuf;
@@ -668,6 +670,7 @@ mod tests {
 
     #[derive(Default)]
     struct World {
+        #[allow(dead_code)] // read by regex-gated step tests
         cukes: u32,
     }
 
@@ -725,6 +728,7 @@ mod tests {
         path
     }
 
+    #[cfg(feature = "regex")]
     #[test]
     fn runs_feature_with_background_and_steps() {
         let dir = std::env::temp_dir().join(format!("mizeria-suite-{}", std::process::id()));
@@ -811,7 +815,10 @@ Feature: X
         let features = Features::builder().build().unwrap();
         let mut suite = Suite::new(new_world);
         suite.given("a user exists", || {});
+        #[cfg(feature = "regex")]
         suite.when(Regex::new(r"they log in").unwrap(), || {});
+        #[cfg(not(feature = "regex"))]
+        suite.when("they log in", || {});
         suite.then("they see the dashboard", || {});
         suite.step("they are ready", || {});
         suite.with_reporter(Printer::stdout());
@@ -900,6 +907,7 @@ Feature: Fail
         assert!(outcome.is_ok());
     }
 
+    #[cfg(feature = "regex")]
     #[test]
     fn keyword_filter_skips_other_bindings() {
         let dir = std::env::temp_dir().join(format!("mizeria-kw-{}", std::process::id()));
@@ -937,6 +945,7 @@ Feature: Keywords
         assert_eq!(outcome.passed, 1);
     }
 
+    #[cfg(feature = "regex")]
     #[test]
     fn and_inherits_previous_keyword() {
         let dir = std::env::temp_dir().join(format!("mizeria-and-{}", std::process::id()));

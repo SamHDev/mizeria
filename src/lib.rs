@@ -1,3 +1,4 @@
+#![cfg_attr(docsrs, feature(doc_cfg))]
 //! Cucumber-style BDD runner with Axum-like step extractors.
 //!
 //! Register [`Given`](suite::Suite::given) / [`When`](suite::Suite::when) / [`Then`](suite::Suite::then) /
@@ -10,7 +11,7 @@
 //! # Quick start
 //!
 //! ```no_run
-//! # #[cfg(feature = "prelude")]
+//! # #[cfg(all(feature = "prelude", feature = "regex"))]
 //! # {
 //! use mizeria::prelude::*;
 //!
@@ -36,6 +37,7 @@
 //! - **`dialects`** (default): embed the full official Gherkin language catalog.
 //! - **`colour`** (default): ANSI-coloured [`ColourSyncPrinter`](listener::ColourSyncPrinter).
 //! - **`prelude`** (default): [`prelude`] re-exports of commonly used items.
+//! - **`regex`** (default): [`Regex`](statement::Regex) / [`re`](statement::re) step matchers.
 //! - **`json`**: legacy Cucumber JSON `JsonReporter`.
 
 pub mod ast;

@@ -32,8 +32,9 @@ pub use crate::response::{
     StepOutcome,
 };
 pub use crate::statement::{
-    CaptureBag, CaptureBagView, Captures, Const, EmptyCaptures, Regex, RegexCaptures,
-    SliceCaptures, Statement, re,
+    CaptureBag, CaptureBagView, Captures, Const, EmptyCaptures, SliceCaptures, Statement,
 };
+#[cfg(feature = "regex")]
+pub use crate::statement::{Regex, RegexCaptures, re};
 pub use crate::suite::{StepKeyword, Suite};
 pub use crate::tags::{TagExpressionError, Tags, TagsBuilder};

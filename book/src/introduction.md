@@ -27,15 +27,13 @@ key (for example `"Alice"` → `Balance`). Listeners only watch.
 - Writing handlers with extractors and entity effects
 - Reporting with listeners and interpreting outcomes
 
-API details live in rustdoc (`cargo doc --open`). This guide focuses on how the pieces
-fit together.
+API details live on [docs.rs](https://docs.rs/mizeria). This guide focuses on how the
+pieces fit together.
 
-## Building the book
+## Links
 
-From the repo root:
+- **API docs:** [docs.rs/mizeria](https://docs.rs/mizeria)
+- **Crates.io:** [crates.io/crates/mizeria](https://crates.io/crates/mizeria)
+- **Repository:** [github.com/samhdev/mizeria](https://github.com/samhdev/mizeria)
 
-```bash
-mdbook serve book
-```
-
-The HTML build lands in `book/html/` (gitignored).
+Local preview: `mdbook serve book` (HTML lands in `book/html/`).

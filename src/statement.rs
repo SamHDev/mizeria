@@ -12,8 +12,8 @@ pub trait Captures<'s>: Send {
 
     /// Invoke `f` for each named capture `(name, value)`.
     ///
-    /// Default: no named groups. [`RegexCaptures`] overrides this so
-    /// [`CaptureBag::from_captures`] can preserve names.
+    /// Default: no named groups. With the `regex` feature, [`RegexCaptures`]
+    /// overrides this so [`CaptureBag::from_captures`] can preserve names.
     fn for_each_named(&self, _f: &mut dyn FnMut(&str, &'s str)) {}
 }
 
@@ -44,6 +44,7 @@ impl CaptureBag {
     }
 
     /// Preserve positional and named groups from a regex match without advancing it.
+    #[cfg(feature = "regex")]
     pub fn from_regex(caps: &RegexCaptures<'_>) -> Self {
         let mut names = HashMap::with_capacity(caps.named.len());
         for &(idx, name) in &caps.named {
@@ -144,6 +145,7 @@ impl<'s> Captures<'s> for SliceCaptures<'s> {
 }
 
 /// Captures produced by a [`Regex`] statement match.
+#[cfg(feature = "regex")]
 #[derive(Debug, Clone)]
 pub struct RegexCaptures<'s> {
     /// Positional groups in match order (unmatched optional groups omitted).
@@ -155,6 +157,7 @@ pub struct RegexCaptures<'s> {
     cursor: usize,
 }
 
+#[cfg(feature = "regex")]
 impl<'s> Captures<'s> for RegexCaptures<'s> {
     fn next(&mut self) -> Option<&'s str> {
         let value = self.groups.get(self.cursor).copied()?;
@@ -236,6 +239,7 @@ impl Statement for Const {
 }
 
 /// Regular-expression match; capture groups feed extractors.
+#[cfg(feature = "regex")]
 #[derive(Debug, Clone)]
 pub struct Regex {
     inner: regex::Regex,
@@ -243,6 +247,7 @@ pub struct Regex {
     named: Box<[(usize, Box<str>)]>,
 }
 
+#[cfg(feature = "regex")]
 impl Regex {
     /// Compile `pattern` as a step regex.
     pub fn new(pattern: &str) -> Result<Self, regex::Error> {
@@ -260,6 +265,7 @@ impl Regex {
 /// Compile a step regex, panicking with a clear message if the pattern is invalid.
 ///
 /// Prefer this over `Regex::new(...).unwrap()` when registering steps at startup.
+#[cfg(feature = "regex")]
 #[track_caller]
 pub fn re(pattern: &str) -> Regex {
     match Regex::new(pattern) {
@@ -268,6 +274,7 @@ pub fn re(pattern: &str) -> Regex {
     }
 }
 
+#[cfg(feature = "regex")]
 impl Statement for Regex {
     type Captures<'s>
         = RegexCaptures<'s>
@@ -325,6 +332,7 @@ mod tests {
         assert!(stmt.matches("I have 41 cukes").is_none());
     }
 
+    #[cfg(feature = "regex")]
     #[test]
     fn regex_full_match_yields_positional_groups() {
         let stmt = Regex::new(r"I have (\d+) cukes in my (\w+)").unwrap();
@@ -334,6 +342,7 @@ mod tests {
         assert!(caps.next().is_none());
     }
 
+    #[cfg(feature = "regex")]
     #[test]
     fn regex_named_groups() {
         let stmt = Regex::new(r"I have (?P<count>\d+) cukes").unwrap();
@@ -342,6 +351,7 @@ mod tests {
         assert!(caps.named("missing").is_none());
     }
 
+    #[cfg(feature = "regex")]
     #[test]
     fn capture_bag_preserves_named_groups() {
         let stmt = Regex::new(r"I have (?P<count>\d+) cukes").unwrap();
@@ -350,6 +360,7 @@ mod tests {
         assert_eq!(bag.view().named("count"), Some("7"));
     }
 
+    #[cfg(feature = "regex")]
     #[test]
     fn regex_rejects_partial_match() {
         let stmt = Regex::new(r"foo").unwrap();
@@ -357,17 +368,20 @@ mod tests {
         assert!(stmt.matches("foo").is_some());
     }
 
+    #[cfg(feature = "regex")]
     #[test]
     fn regex_invalid_pattern() {
         assert!(Regex::new(r"(unterminated").is_err());
     }
 
+    #[cfg(feature = "regex")]
     #[test]
     fn re_compiles_valid_pattern() {
         let stmt = re(r"I have (\d+) cukes");
         assert!(stmt.matches("I have 3 cukes").is_some());
     }
 
+    #[cfg(feature = "regex")]
     #[test]
     #[should_panic(expected = "invalid step regex `(unterminated`:")]
     fn re_panics_on_invalid_pattern() {
