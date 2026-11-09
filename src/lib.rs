@@ -1,8 +1,9 @@
 //! Cucumber-style BDD runner with Axum-like step extractors.
 //!
-//! Register [`Given`](Suite::given) / [`When`](Suite::when) / [`Then`](Suite::then) handlers
-//! on a [`Suite`], point it at [`.feature`](Features) files, and [`run`](Suite::run) or
-//! [`run_blocking`](Suite::run_blocking). Handlers pull typed values from a
+//! Register [`Given`](Suite::given) / [`When`](Suite::when) / [`Then`](Suite::then) /
+//! [`step`](Suite::step) handlers on a [`Suite`], optionally [`init`](Suite::init)
+//! per-scenario setup, point it at [`.feature`](Features) files, and [`run`](Suite::run)
+//! or [`run_blocking`](Suite::run_blocking). Handlers pull typed values from a
 //! [`StepContext`] via extractors such as capture params, [`CtxMut`] world leases, and
 //! scenario [`entity`] values.
 //!
@@ -16,13 +17,14 @@
 //!     cukes: u32,
 //! }
 //!
-//! let features = Features::builder().add_path("features").build();
+//! let mut features = Features::builder().add_path("features").build().unwrap();
+//! features.exclude(Tags::parse("@wip").unwrap());
 //! let mut suite = Suite::new(World::default);
 //! suite
 //!     .given(re(r"I have (\d+) cukes"), |n: u32, mut world: CtxMut<World>| {
 //!         world.cukes = n;
 //!     })
-//!     .bind(Printer::stdout());
+//!     .with_reporter(Printer::stdout());
 //! let _ = suite.run_blocking(&features);
 //! ```
 //!
@@ -47,6 +49,7 @@ pub mod prelude;
 pub mod response;
 pub mod statement;
 pub mod suite;
+pub mod tags;
 
 pub use entity::{
     Effect, EntityBag, EntityKey, EntityRejection, Get, GetMut, GetRef, Insert, InsertNamed, Named,
@@ -56,17 +59,19 @@ pub use extract::{
     parse_from_str, Ctx, CtxMut, CtxRef, DataTable, DocString, FromCapture, FromRow, FromStep,
     Param, StepArgument, StepContext,
 };
-pub use features::{Features, FeaturesBuilder};
+pub use features::{Features, FeaturesBuilder, LoadedDocument};
 pub use handler::{call, Call, Handler, IntoStepFuture};
 pub use listener::{
-    ASCIISyncPrinter, FeatureEvent, Listener, Printer, RuleEvent, ScenarioEvent, StepEvent,
-    StepResult,
+    ASCIISyncPrinter, FeatureEvent, Joined, Listener, Printer, RuleEvent, ScenarioEvent,
+    StepEvent, StepResult,
 };
 #[cfg(feature = "colour")]
 pub use listener::{Colour, ColourSyncPrinter};
 #[cfg(feature = "json")]
 pub use listener::JsonReporter;
-pub use loader::{load_features, FeatureSource, LoadError};
+pub use loader::{
+    discover_feature_paths, load_feature_sources, read_feature_sources, FeatureSource, LoadError,
+};
 pub use lock::{LockError, Locked, ReadGuard, WriteGuard};
 pub use outcome::Outcome;
 pub use response::{
@@ -78,3 +83,4 @@ pub use statement::{
     SliceCaptures, Statement,
 };
 pub use suite::{StepKeyword, Suite};
+pub use tags::{TagExpressionError, Tags, TagsBuilder};

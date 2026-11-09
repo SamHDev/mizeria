@@ -1,23 +1,22 @@
-//! Suite entrypoint: register steps, bind a listener, run features.
+//! Suite entrypoint: register steps, attach a reporter, run features.
 
 use std::borrow::Cow;
 use std::future::Future;
 use std::marker::PhantomData;
 use std::pin::Pin;
 
-use crate::ast::{self, Background, FeatureChild, Location, RuleChild, Scenario, Step};
+use crate::ast::{Background, Feature, FeatureChild, Location, RuleChild, Scenario, Step};
 use crate::entity::EntityBag;
 use crate::extract::{StepArgument, StepContext};
-use crate::features::Features;
+use crate::features::{Features, LoadedDocument};
 use crate::handler::Handler;
 use crate::listener::{
     FeatureEvent, Listener, RuleEvent, ScenarioEvent, StepEvent, StepResult,
 };
-use crate::loader;
 use crate::lock::Locked;
 use crate::outcome::Outcome;
 use crate::response::StepOutcome;
-use crate::statement::{CaptureBag, Statement};
+use crate::statement::{CaptureBag, EmptyCaptures, Statement};
 
 /// Which Gherkin keyword a step definition was registered under.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -28,6 +27,8 @@ pub enum StepKeyword {
     When,
     /// `Then` / outcome step.
     Then,
+    /// Keyword-agnostic step (matches any Given/When/Then/And/But text).
+    Step,
 }
 
 trait DynStep<W>: Send + Sync {
@@ -67,6 +68,34 @@ where
     }
 }
 
+trait DynInit<W>: Send + Sync {
+    fn invoke<'a>(
+        &'a self,
+        ctx: StepContext<'a, W>,
+    ) -> Pin<Box<dyn Future<Output = StepOutcome> + 'a>>;
+}
+
+struct InitBinding<H, T, M> {
+    handler: H,
+    _marker: PhantomData<fn() -> (T, M)>,
+}
+
+impl<H, T, M, W> DynInit<W> for InitBinding<H, T, M>
+where
+    H: Handler<T, W, M> + Sync,
+    T: 'static,
+    M: 'static,
+    W: Send + Sync + 'static,
+{
+    fn invoke<'a>(
+        &'a self,
+        ctx: StepContext<'a, W>,
+    ) -> Pin<Box<dyn Future<Output = StepOutcome> + 'a>> {
+        let handler = self.handler.clone();
+        Box::pin(async move { Handler::call(handler, ctx).await })
+    }
+}
+
 /// Registered steps and world factory for a cucumber run.
 ///
 /// `W` is the per-scenario world type constructed by the factory passed to
@@ -75,6 +104,7 @@ pub struct Suite<W> {
     world_factory: fn() -> W,
     steps: Vec<Box<dyn DynStep<W>>>,
     keywords: Vec<StepKeyword>,
+    inits: Vec<Box<dyn DynInit<W>>>,
     listener: Option<Box<dyn Listener>>,
 }
 
@@ -85,13 +115,37 @@ impl<W> Suite<W> {
             world_factory,
             steps: Vec::new(),
             keywords: Vec::new(),
+            inits: Vec::new(),
             listener: None,
         }
     }
 
-    /// Attach a lifecycle listener (replaces any previously bound listener).
-    pub fn bind(&mut self, listener: impl Listener + 'static) -> &mut Self {
+    /// Attach a lifecycle reporter (replaces any previously attached reporter).
+    pub fn with_reporter(&mut self, listener: impl Listener + 'static) -> &mut Self {
         self.listener = Some(Box::new(listener));
+        self
+    }
+
+    /// Register a handler that runs once at the start of every scenario.
+    ///
+    /// Inits run in registration order after the world and entity bag are created,
+    /// before Background and scenario steps. Use them to seed entities (e.g. return
+    /// [`crate::entity::Put`] / [`crate::entity::Insert`]). Capture-based extractors
+    /// are unavailable (empty captures, no step argument).
+    ///
+    /// Multiple inits may be registered; a failure skips remaining inits and all
+    /// Gherkin steps for that scenario.
+    pub fn init<T, M, H>(&mut self, handler: H) -> &mut Self
+    where
+        H: Handler<T, W, M> + Sync,
+        T: 'static,
+        M: 'static,
+        W: Send + Sync + 'static,
+    {
+        self.inits.push(Box::new(InitBinding {
+            handler,
+            _marker: PhantomData,
+        }));
         self
     }
 
@@ -134,6 +188,18 @@ impl<W> Suite<W> {
         self.push(StepKeyword::Then, statement, handler)
     }
 
+    /// Register a keyword-agnostic step (matches Given/When/Then/And/But by text).
+    pub fn step<S, T, M, H>(&mut self, statement: S, handler: H) -> &mut Self
+    where
+        S: Statement + 'static,
+        H: Handler<T, W, M> + Sync,
+        T: 'static,
+        M: 'static,
+        W: Send + Sync + 'static,
+    {
+        self.push(StepKeyword::Step, statement, handler)
+    }
+
     fn push<S, T, M, H>(&mut self, keyword: StepKeyword, statement: S, handler: H) -> &mut Self
     where
         S: Statement + 'static,
@@ -166,7 +232,7 @@ impl<W> Suite<W> {
         self.steps.iter().any(|s| s.matches(text).is_some())
     }
 
-    /// Async entrypoint: load features, execute scenarios, notify the listener.
+    /// Async entrypoint: execute loaded features, notify the listener.
     pub async fn run(&mut self, features: &Features) -> Outcome
     where
         W: Send + Sync + 'static,
@@ -191,16 +257,10 @@ impl<W> Suite<W> {
         }
 
         let mut outcome = Outcome::new();
+        outcome.failed += features.parse_failures();
 
-        match loader::load_features(features) {
-            Ok(sources) => {
-                for source in &sources {
-                    self.run_feature_source(source, &mut outcome).await;
-                }
-            }
-            Err(_err) => {
-                outcome.failed += 1;
-            }
+        for doc in features.documents() {
+            self.run_document(doc, &mut outcome).await;
         }
 
         if let Some(listener) = self.listener.as_mut() {
@@ -210,29 +270,19 @@ impl<W> Suite<W> {
         outcome
     }
 
-    async fn run_feature_source(
+    async fn run_document(
         &mut self,
-        source: &loader::FeatureSource,
+        doc: &LoadedDocument,
         outcome: &mut Outcome,
     ) where
         W: Send + Sync + 'static,
     {
-        let doc = match ast::parse(&source.source) {
-            Ok(doc) => doc,
-            Err(_err) => {
-                outcome.failed += 1;
-                return;
-            }
-        };
-
-        let Some(feature) = doc.feature.as_ref() else {
-            return;
-        };
+        let feature: &Feature<'static> = &doc.feature;
 
         let feature_event = FeatureEvent {
-            uri: &source.uri,
-            name: feature.name,
-            keyword: feature.keyword,
+            uri: &doc.uri,
+            name: feature.name.as_ref(),
+            keyword: feature.keyword.as_ref(),
             location: feature.location,
         };
 
@@ -240,7 +290,7 @@ impl<W> Suite<W> {
             listener.on_feature_started(&feature_event);
         }
 
-        let mut feature_bg: Option<&Background<'_>> = None;
+        let mut feature_bg: Option<&Background<'static>> = None;
 
         for child in &feature.children {
             match child {
@@ -253,15 +303,15 @@ impl<W> Suite<W> {
                 }
                 FeatureChild::Rule(rule) => {
                     let rule_event = RuleEvent {
-                        name: rule.name,
-                        keyword: rule.keyword,
+                        name: rule.name.as_ref(),
+                        keyword: rule.keyword.as_ref(),
                         location: rule.location,
                     };
                     if let Some(listener) = self.listener.as_mut() {
                         listener.on_rule_started(&rule_event);
                     }
 
-                    let mut rule_bg: Option<&Background<'_>> = None;
+                    let mut rule_bg: Option<&Background<'static>> = None;
                     for child in &rule.children {
                         match child {
                             RuleChild::Background(bg) => rule_bg = Some(bg),
@@ -286,9 +336,9 @@ impl<W> Suite<W> {
 
     async fn run_scenario(
         &mut self,
-        feature_bg: Option<&Background<'_>>,
-        rule_bg: Option<&Background<'_>>,
-        scenario: &Scenario<'_>,
+        feature_bg: Option<&Background<'static>>,
+        rule_bg: Option<&Background<'static>>,
+        scenario: &Scenario<'static>,
         outcome: &mut Outcome,
     ) where
         W: Send + Sync + 'static,
@@ -302,17 +352,17 @@ impl<W> Suite<W> {
 
     async fn run_example(
         &mut self,
-        feature_bg: Option<&Background<'_>>,
-        rule_bg: Option<&Background<'_>>,
-        scenario: &Scenario<'_>,
+        feature_bg: Option<&Background<'static>>,
+        rule_bg: Option<&Background<'static>>,
+        scenario: &Scenario<'static>,
         example: &ExampleRow,
         outcome: &mut Outcome,
     ) where
         W: Send + Sync + 'static,
     {
         let scenario_event = ScenarioEvent {
-            name: scenario.name,
-            keyword: scenario.keyword,
+            name: scenario.name.as_ref(),
+            keyword: scenario.keyword.as_ref(),
             location: scenario.location,
         };
 
@@ -324,6 +374,24 @@ impl<W> Suite<W> {
         let mut entities = EntityBag::new();
         let mut status = ScenarioStatus::Passed;
         let mut skip_rest = false;
+
+        for init in &self.inits {
+            if skip_rest {
+                break;
+            }
+            let ctx = StepContext::new(world.clone(), &mut entities, EmptyCaptures, None);
+            match map_outcome(init.invoke(ctx).await) {
+                StepResult::Passed => {}
+                StepResult::Failed { .. } => {
+                    status = ScenarioStatus::Failed;
+                    skip_rest = true;
+                }
+                StepResult::Undefined | StepResult::Skipped => {
+                    status = ScenarioStatus::Failed;
+                    skip_rest = true;
+                }
+            }
+        }
 
         let mut steps = Vec::new();
         if let Some(bg) = feature_bg {
@@ -471,8 +539,8 @@ struct RunnableStep {
     table: Option<Vec<Vec<String>>>,
 }
 
-fn runnable_step(step: &Step<'_>, example: &ExampleRow) -> RunnableStep {
-    let text = example.substitute(step.text).into_owned();
+fn runnable_step(step: &Step<'static>, example: &ExampleRow) -> RunnableStep {
+    let text = example.substitute(step.text.as_ref()).into_owned();
     let doc_string = step.doc_string.as_ref().map(|doc| {
         let content = doc.content();
         example.substitute(content.as_ref()).into_owned()
@@ -491,7 +559,7 @@ fn runnable_step(step: &Step<'_>, example: &ExampleRow) -> RunnableStep {
     });
 
     RunnableStep {
-        keyword: step.keyword.to_owned(),
+        keyword: step.keyword.as_ref().to_owned(),
         text,
         location: step.location,
         doc_string,
@@ -499,7 +567,7 @@ fn runnable_step(step: &Step<'_>, example: &ExampleRow) -> RunnableStep {
     }
 }
 
-fn expand_examples(scenario: &Scenario<'_>) -> Vec<ExampleRow> {
+fn expand_examples(scenario: &Scenario<'static>) -> Vec<ExampleRow> {
     if scenario.examples.is_empty() {
         return vec![ExampleRow::default()];
     }
@@ -622,7 +690,7 @@ Feature: Cukes
 ",
         );
 
-        let features = Features::builder().add_path(&feature).build();
+        let features = Features::builder().add_path(&feature).build().unwrap();
         let listener = Arc::new(Mutex::new(RecordingListener::default()));
 
         let mut suite = Suite::new(new_world);
@@ -644,7 +712,7 @@ Feature: Cukes
                 assert_eq!(world.cukes, n);
             },
         );
-        suite.bind(Shared(Arc::clone(&listener)));
+        suite.with_reporter(Shared(Arc::clone(&listener)));
 
         let outcome = suite.run_blocking(&features);
         let _ = fs::remove_dir_all(&dir);
@@ -677,7 +745,7 @@ Feature: X
 ",
         );
 
-        let features = Features::builder().add_path(&feature).build();
+        let features = Features::builder().add_path(&feature).build().unwrap();
         let mut suite = Suite::new(new_world);
         let outcome = suite.run_blocking(&features);
         let _ = fs::remove_dir_all(&dir);
@@ -688,27 +756,100 @@ Feature: X
 
     #[test]
     fn registration_helpers_still_work() {
-        let features = Features::builder().build();
+        let features = Features::builder().build().unwrap();
         let mut suite = Suite::new(new_world);
         suite.given("a user exists", || {});
         suite.when(Regex::new(r"they log in").unwrap(), || {});
         suite.then("they see the dashboard", || {});
-        suite.bind(Printer::stdout());
+        suite.step("they are ready", || {});
+        suite.with_reporter(Printer::stdout());
 
-        assert_eq!(suite.step_count(), 3);
+        assert_eq!(suite.step_count(), 4);
         assert_eq!(suite.step_keyword(0), Some(StepKeyword::Given));
+        assert_eq!(suite.step_keyword(3), Some(StepKeyword::Step));
         assert!(suite.has_match("a user exists"));
+        assert!(suite.has_match("they are ready"));
 
         let outcome = suite.run_blocking(&features);
         assert!(outcome.is_ok());
         assert_eq!(outcome.total(), 0);
     }
 
+    #[test]
+    fn init_seeds_entity_bag_before_steps() {
+        use crate::entity::{Get, Put};
+
+        let dir = std::env::temp_dir().join(format!(
+            "cutecumber-init-{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&dir);
+        let feature = write_feature(
+            &dir,
+            "init.feature",
+            "\
+Feature: Init
+  Scenario: seeded
+    Then the counter is 7
+",
+        );
+
+        let features = Features::builder().add_path(&feature).build().unwrap();
+        let mut suite = Suite::new(|| ());
+        suite.init(|| Put::new(7u32));
+        suite.init(|| Put::new(7u32)); // second init replaces; still fine
+        suite.then("the counter is 7", |counter: Get<u32>| {
+            assert_eq!(*counter, 7);
+        });
+
+        let outcome = suite.run_blocking(&features);
+        let _ = fs::remove_dir_all(&dir);
+
+        assert!(outcome.is_ok(), "{outcome:?}");
+        assert_eq!(outcome.passed, 1);
+    }
+
+    #[test]
+    fn failing_init_fails_scenario_and_skips_steps() {
+        use crate::response::StepError;
+
+        let dir = std::env::temp_dir().join(format!(
+            "cutecumber-init-fail-{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&dir);
+        let feature = write_feature(
+            &dir,
+            "fail.feature",
+            "\
+Feature: Fail
+  Scenario: boom
+    Then never runs
+",
+        );
+
+        let features = Features::builder().add_path(&feature).build().unwrap();
+        let listener = Arc::new(Mutex::new(RecordingListener::default()));
+        let mut suite = Suite::new(|| ());
+        suite.init(|| Err::<(), _>(StepError::new("init failed")));
+        suite.then("never runs", || {});
+        suite.with_reporter(Shared(Arc::clone(&listener)));
+
+        let outcome = suite.run_blocking(&features);
+        let _ = fs::remove_dir_all(&dir);
+
+        assert!(!outcome.is_ok());
+        assert_eq!(outcome.failed, 1);
+        let guard = listener.lock().unwrap();
+        assert_eq!(guard.steps_finished.len(), 1);
+        assert!(matches!(guard.steps_finished[0], StepResult::Skipped));
+    }
+
     #[tokio::test]
     async fn run_async_empty() {
-        let features = Features::builder().build();
+        let features = Features::builder().build().unwrap();
         let mut suite = Suite::new(new_world);
-        suite.bind(Printer::stdout());
+        suite.with_reporter(Printer::stdout());
         let outcome = suite.run(&features).await;
         assert!(outcome.is_ok());
     }

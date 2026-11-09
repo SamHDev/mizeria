@@ -12,17 +12,19 @@ pub use crate::extract::{
     parse_from_str, Ctx, CtxMut, CtxRef, DataTable, DocString, FromCapture, FromRow, FromStep,
     Param, StepArgument, StepContext,
 };
-pub use crate::features::{Features, FeaturesBuilder};
+pub use crate::features::{Features, FeaturesBuilder, LoadedDocument};
 pub use crate::handler::{call, Call, Handler, IntoStepFuture};
 pub use crate::listener::{
-    ASCIISyncPrinter, FeatureEvent, Listener, Printer, RuleEvent, ScenarioEvent, StepEvent,
-    StepResult,
+    ASCIISyncPrinter, FeatureEvent, Joined, Listener, Printer, RuleEvent, ScenarioEvent,
+    StepEvent, StepResult,
 };
 #[cfg(feature = "colour")]
 pub use crate::listener::{Colour, ColourSyncPrinter};
 #[cfg(feature = "json")]
 pub use crate::listener::JsonReporter;
-pub use crate::loader::{load_features, FeatureSource, LoadError};
+pub use crate::loader::{
+    discover_feature_paths, load_feature_sources, read_feature_sources, FeatureSource, LoadError,
+};
 pub use crate::lock::{LockError, Locked, ReadGuard, WriteGuard};
 pub use crate::outcome::Outcome;
 pub use crate::response::{
@@ -34,3 +36,4 @@ pub use crate::statement::{
     SliceCaptures, Statement,
 };
 pub use crate::suite::{StepKeyword, Suite};
+pub use crate::tags::{TagExpressionError, Tags, TagsBuilder};

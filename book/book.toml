@@ -1,0 +1,11 @@
+[book]
+title = "Cutecumber"
+description = "User guide for the Cutecumber BDD runner"
+src = "src"
+language = "en"
+
+[build]
+build-dir = "html"
+
+[output.html]
+default-theme = "light"

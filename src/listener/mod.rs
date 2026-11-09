@@ -4,17 +4,20 @@
 //! [`ASCIISyncPrinter`] is the plain completion reporter; with the `colour` feature
 //! (on by default), [`ColourSyncPrinter`] adds ANSI styling and becomes [`Printer`].
 //! Enable the `json` feature for the legacy Cucumber JSON [`JsonReporter`].
+//! Compose multiple listeners with [`Listener::and`] / [`Joined`].
 
 mod ascii;
 mod buffer;
 #[cfg(feature = "colour")]
 mod colour;
+mod joined;
 #[cfg(feature = "json")]
 mod json;
 
 pub use ascii::ASCIISyncPrinter;
 #[cfg(feature = "colour")]
 pub use colour::{Colour, ColourSyncPrinter};
+pub use joined::Joined;
 #[cfg(feature = "json")]
 pub use json::JsonReporter;
 
@@ -114,6 +117,19 @@ pub trait Listener: Send {
 
     /// A step finished with `result`.
     fn on_step_finished(&mut self, _event: &StepEvent<'_>, _result: &StepResult) {}
+
+    /// Combine this listener with `other`, forwarding hooks left-to-right.
+    ///
+    /// ```ignore
+    /// suite.with_reporter(Printer::stdout().and(JsonReporter::stdout()));
+    /// ```
+    fn and<R>(self, other: R) -> Joined<Self, R>
+    where
+        Self: Sized,
+        R: Listener,
+    {
+        Joined(self, other)
+    }
 }
 
 /// Stdout-backed completion printer (coloured when the `colour` feature is enabled).

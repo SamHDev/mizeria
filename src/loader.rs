@@ -1,10 +1,8 @@
-//! Discover and read `.feature` sources from [`Features`] paths.
+//! Discover and read `.feature` sources from configured paths.
 
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
-
-use crate::features::Features;
 
 /// One feature file on disk, ready to parse.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -62,21 +60,40 @@ impl std::error::Error for LoadError {
     }
 }
 
-/// Collect feature file contents for a suite run.
+/// Discover `.feature` paths under the given roots.
 ///
-/// Directories are walked according to [`Features::recursive`]. Paths are sorted
-/// and deduplicated before reading.
-pub fn load_features(features: &Features) -> Result<Vec<FeatureSource>, LoadError> {
-    let mut paths = Vec::new();
-    for root in features.paths() {
-        collect_paths(root, features.recursive(), &mut paths)?;
+/// Directories are walked according to `recursive`. Paths are sorted and
+/// deduplicated.
+pub fn discover_feature_paths(
+    paths: &[PathBuf],
+    recursive: bool,
+) -> Result<Vec<PathBuf>, LoadError> {
+    let mut discovered = Vec::new();
+    for root in paths {
+        collect_paths(root, recursive, &mut discovered)?;
     }
-    paths.sort();
-    paths.dedup();
+    discovered.sort();
+    discovered.dedup();
+    Ok(discovered)
+}
 
+/// Collect feature file contents for the given roots.
+///
+/// Directories are walked according to `recursive`. Paths are sorted and
+/// deduplicated before reading.
+pub fn load_feature_sources(
+    paths: &[PathBuf],
+    recursive: bool,
+) -> Result<Vec<FeatureSource>, LoadError> {
+    let discovered = discover_feature_paths(paths, recursive)?;
+    read_feature_sources(&discovered)
+}
+
+/// Read the given feature file paths into [`FeatureSource`] values.
+pub fn read_feature_sources(paths: &[PathBuf]) -> Result<Vec<FeatureSource>, LoadError> {
     let mut out = Vec::with_capacity(paths.len());
     for path in paths {
-        let source = fs::read_to_string(&path).map_err(|source| LoadError::Io {
+        let source = fs::read_to_string(path).map_err(|source| LoadError::Io {
             path: path.clone(),
             source,
         })?;

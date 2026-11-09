@@ -153,9 +153,9 @@ impl<'s> Parser<'s> {
         Ok(Feature {
             location: feature_tok.location,
             tags,
-            language,
-            keyword: feature_tok.keyword.unwrap_or("Feature"),
-            name: feature_tok.text,
+            language: Cow::Borrowed(language),
+            keyword: Cow::Borrowed(feature_tok.keyword.unwrap_or("Feature")),
+            name: Cow::Borrowed(feature_tok.text),
             description,
             children,
         })
@@ -181,8 +181,8 @@ impl<'s> Parser<'s> {
         Ok(Rule {
             location: rule_tok.location,
             tags,
-            keyword: rule_tok.keyword.unwrap_or("Rule"),
-            name: rule_tok.text,
+            keyword: Cow::Borrowed(rule_tok.keyword.unwrap_or("Rule")),
+            name: Cow::Borrowed(rule_tok.text),
             description,
             children,
         })
@@ -195,8 +195,8 @@ impl<'s> Parser<'s> {
         let steps = self.parse_steps()?;
         Ok(Background {
             location: tok.location,
-            keyword: tok.keyword.unwrap_or("Background"),
-            name: tok.text,
+            keyword: Cow::Borrowed(tok.keyword.unwrap_or("Background")),
+            name: Cow::Borrowed(tok.text),
             description,
             steps,
         })
@@ -217,8 +217,8 @@ impl<'s> Parser<'s> {
         Ok(Scenario {
             location: tok.location,
             tags,
-            keyword: tok.keyword.unwrap_or("Scenario"),
-            name: tok.text,
+            keyword: Cow::Borrowed(tok.keyword.unwrap_or("Scenario")),
+            name: Cow::Borrowed(tok.text),
             description,
             steps,
             examples,
@@ -243,8 +243,8 @@ impl<'s> Parser<'s> {
         Ok(Examples {
             location: tok.location,
             tags,
-            keyword: tok.keyword.unwrap_or("Examples"),
-            name: tok.text,
+            keyword: Cow::Borrowed(tok.keyword.unwrap_or("Examples")),
+            name: Cow::Borrowed(tok.text),
             description,
             table_header,
             table_body,
@@ -267,9 +267,9 @@ impl<'s> Parser<'s> {
         let (data_table, doc_string) = self.parse_step_arg()?;
         Ok(Step {
             location: tok.location,
-            keyword: tok.keyword.unwrap_or(""),
+            keyword: Cow::Borrowed(tok.keyword.unwrap_or("")),
             keyword_type: tok.keyword_type.unwrap_or(KeywordType::Unknown),
-            text: tok.text,
+            text: Cow::Borrowed(tok.text),
             data_table,
             doc_string,
         })
@@ -385,9 +385,9 @@ impl<'s> Parser<'s> {
         // Gherkin removes the indentation of the opening delimiter from every content line.
         Ok(DocString {
             location: open.location,
-            delimiter,
-            media_type,
-            raw,
+            delimiter: Cow::Borrowed(delimiter),
+            media_type: media_type.map(Cow::Borrowed),
+            raw: Cow::Borrowed(raw),
             content_indent: open_indent,
         })
     }
@@ -399,7 +399,7 @@ impl<'s> Parser<'s> {
             for item in &tok.items {
                 tags.push(Tag {
                     location: item.location,
-                    name: item.text,
+                    name: Cow::Borrowed(item.text),
                 });
             }
             self.skip_ignored();
@@ -452,7 +452,10 @@ impl<'s> Parser<'s> {
                     let location = self.peek().location;
                     let text = self.peek().text;
                     self.advance();
-                    self.comments.push(Comment { location, text });
+                    self.comments.push(Comment {
+                        location,
+                        text: Cow::Borrowed(text),
+                    });
                 }
                 TokenKind::Empty => {
                     // Empty lines are part of description until a structural token; but trailing
@@ -570,7 +573,10 @@ impl<'s> Parser<'s> {
                     let location = self.peek().location;
                     let text = self.peek().text;
                     self.advance();
-                    self.comments.push(Comment { location, text });
+                    self.comments.push(Comment {
+                        location,
+                        text: Cow::Borrowed(text),
+                    });
                 }
                 _ => break,
             }
@@ -745,7 +751,7 @@ Feature: Docs
         let table = sc.steps[0].data_table.as_ref().unwrap();
         assert_eq!(table.rows[1].cells[0].value.as_ref(), "Ada");
         let doc_string = sc.steps[1].doc_string.as_ref().unwrap();
-        assert_eq!(doc_string.media_type, Some("json"));
+        assert_eq!(doc_string.media_type.as_deref(), Some("json"));
         assert_eq!(doc_string.content().as_ref(), "{\"ok\": true}");
     }
 

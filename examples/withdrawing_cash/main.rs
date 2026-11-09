@@ -69,7 +69,10 @@ fn main() {
     let features_dir =
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("examples/withdrawing_cash/features");
 
-    let features = Features::builder().add_path(features_dir).build();
+    let features = Features::builder()
+        .add_path(features_dir)
+        .build()
+        .expect("load features");
 
     let mut suite = Suite::new(|| ());
     suite
@@ -77,7 +80,7 @@ fn main() {
         .when(re(r"(\w+) tries to withdraw (\d+\.\d{2})"), try_withdraw)
         .then("the withdrawal is successful", withdrawal_successful)
         .then("the withdrawal is declined", withdrawal_declined)
-        .bind(Printer::stdout().symbols(true));
+        .with_reporter(Printer::stdout().symbols(true));
 
     let outcome = suite.run_blocking(&features);
     if !outcome.is_ok() {
