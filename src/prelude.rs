@@ -1,7 +1,7 @@
 //! Commonly used items for step suites.
 //!
 //! ```
-//! use cutecumber::prelude::*;
+//! use mizeria::prelude::*;
 //! ```
 
 pub use crate::entity::{

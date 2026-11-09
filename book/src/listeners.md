@@ -34,7 +34,7 @@ keeping the colour feature compiled in.
 All methods have no-op defaults:
 
 ```rust,ignore
-use cutecumber::prelude::*;
+use mizeria::prelude::*;
 
 struct Counting {
     scenarios: usize,

@@ -3,7 +3,7 @@
 use std::path::PathBuf;
 use std::str::FromStr;
 
-use cutecumber::prelude::*;
+use mizeria::prelude::*;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct Balance(u64);

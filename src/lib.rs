@@ -10,7 +10,7 @@
 //! # Quick start
 //!
 //! ```no_run
-//! use cutecumber::prelude::*;
+//! use mizeria::prelude::*;
 //!
 //! #[derive(Default)]
 //! struct World {

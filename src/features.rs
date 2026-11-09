@@ -287,7 +287,7 @@ mod tests {
 
     #[test]
     fn include_and_exclude_prune_in_place() {
-        let dir = std::env::temp_dir().join(format!("cutecumber-tags-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("mizeria-tags-{}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
         let path = write_feature(
             &dir,
@@ -327,7 +327,7 @@ Feature: Tagged
 
     #[test]
     fn inherits_feature_and_rule_tags() {
-        let dir = std::env::temp_dir().join(format!("cutecumber-inherit-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("mizeria-inherit-{}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
         let path = write_feature(
             &dir,
@@ -358,7 +358,7 @@ Feature: Epic
 
     #[test]
     fn filters_examples_blocks() {
-        let dir = std::env::temp_dir().join(format!("cutecumber-ex-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("mizeria-ex-{}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
         let path = write_feature(
             &dir,
@@ -399,7 +399,7 @@ Feature: Outline
     #[test]
     fn include_and_exclude_path_filter_discovered_files() {
         let dir =
-            std::env::temp_dir().join(format!("cutecumber-path-filter-{}", std::process::id()));
+            std::env::temp_dir().join(format!("mizeria-path-filter-{}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
         let smoke_dir = dir.join("smoke");
         let wip_dir = dir.join("wip");

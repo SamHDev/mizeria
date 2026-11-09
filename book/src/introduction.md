@@ -1,6 +1,6 @@
 # Introduction
 
-Cutecumber is a Cucumber-style BDD runner for Rust with **Axum-like step extractors**.
+Mizeria is a Cucumber-style BDD runner for Rust with **Axum-like step extractors**.
 You write Gherkin `.feature` files, register `Given` / `When` / `Then` handlers on a
 [`Suite`](suite.md), and run them. Handlers pull typed values from the step context —
 capture groups, a scenario world, doc strings, data tables, and scenario entities —

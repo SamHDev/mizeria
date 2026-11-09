@@ -1,17 +1,17 @@
 # Quickstart
 
-Add Cutecumber to your crate (default features include coloured printing and the
+Add Mizeria to your crate (default features include coloured printing and the
 prelude):
 
 ```toml
 [dependencies]
-cutecumber = "0.1"
+mizeria = "0.1"
 ```
 
 Create a world, point at a features directory, register steps, bind a printer, and run:
 
 ```rust,ignore
-use cutecumber::prelude::*;
+use mizeria::prelude::*;
 
 #[derive(Default)]
 struct World {

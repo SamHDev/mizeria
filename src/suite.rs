@@ -727,7 +727,7 @@ mod tests {
 
     #[test]
     fn runs_feature_with_background_and_steps() {
-        let dir = std::env::temp_dir().join(format!("cutecumber-suite-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("mizeria-suite-{}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
         let feature = write_feature(
             &dir,
@@ -785,7 +785,7 @@ Feature: Cukes
 
     #[test]
     fn undefined_step_marks_scenario() {
-        let dir = std::env::temp_dir().join(format!("cutecumber-undef-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("mizeria-undef-{}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
         let feature = write_feature(
             &dir,
@@ -831,7 +831,7 @@ Feature: X
     fn init_seeds_entity_bag_before_steps() {
         use crate::entity::{Get, Put};
 
-        let dir = std::env::temp_dir().join(format!("cutecumber-init-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("mizeria-init-{}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
         let feature = write_feature(
             &dir,
@@ -862,7 +862,7 @@ Feature: Init
     fn failing_init_fails_scenario_and_skips_steps() {
         use crate::response::StepError;
 
-        let dir = std::env::temp_dir().join(format!("cutecumber-init-fail-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("mizeria-init-fail-{}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
         let feature = write_feature(
             &dir,
@@ -902,7 +902,7 @@ Feature: Fail
 
     #[test]
     fn keyword_filter_skips_other_bindings() {
-        let dir = std::env::temp_dir().join(format!("cutecumber-kw-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("mizeria-kw-{}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
         let feature = write_feature(
             &dir,
@@ -939,7 +939,7 @@ Feature: Keywords
 
     #[test]
     fn and_inherits_previous_keyword() {
-        let dir = std::env::temp_dir().join(format!("cutecumber-and-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("mizeria-and-{}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
         let feature = write_feature(
             &dir,

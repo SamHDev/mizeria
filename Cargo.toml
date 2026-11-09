@@ -1,7 +1,12 @@
 [package]
-name = "cutecumber"
-version = "0.1.0"
+name = "mizeria"
+version = "0.2.0"
 edition = "2024"
+license = "MIT"
+repository = "https://github.com/samhdev/mizeria"
+homepage = "https://github.com/samhdev/mizeria"
+documentation = "https://docs.rs/mizeria"
+description = "Prototype cucumber-style BDD runner for Rust"
 
 [features]
 default = ["dialects", "colour", "prelude"]
@@ -9,7 +14,7 @@ default = ["dialects", "colour", "prelude"]
 dialects = []
 # ANSI-coloured completion printer (`ColourSyncPrinter` / default `Printer`).
 colour = ["dep:console"]
-# Re-exports common types via `cutecumber::prelude`.
+# Re-exports common types via `mizeria::prelude`.
 prelude = []
 # Legacy Cucumber JSON listener (`listener::JsonReporter`).
 json = ["dep:serde", "dep:serde_json"]

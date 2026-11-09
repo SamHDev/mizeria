@@ -1,8 +1,8 @@
 //! Hot-path benches: step matching and outline placeholder expansion.
 
 use criterion::{Criterion, black_box, criterion_group, criterion_main};
-use cutecumber::statement::{Regex, Statement};
-use cutecumber::{Features, Suite};
+use mizeria::statement::{Regex, Statement};
+use mizeria::{Features, Suite};
 use std::time::Duration;
 
 fn many_regex_definitions(c: &mut Criterion) {
@@ -27,7 +27,7 @@ fn many_regex_definitions(c: &mut Criterion) {
 }
 
 fn suite_keyword_filtered_match(c: &mut Criterion) {
-    let dir = std::env::temp_dir().join("cutecumber-bench-kw");
+    let dir = std::env::temp_dir().join("mizeria-bench-kw");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     let path = dir.join("b.feature");

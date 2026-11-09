@@ -1,4 +1,4 @@
-# Cutecumber
+# Mizeria
 
 > [!WARNING]
 > AI written prototype with a breaking API
@@ -14,7 +14,7 @@ doc strings, data tables, and scenario entities.
 ## Quick start
 
 ```rust,ignore
-use cutecumber::prelude::*;
+use mizeria::prelude::*;
 
 #[derive(Default, Clone)]
 struct Cukes(u32);
@@ -44,5 +44,5 @@ let _ = suite.run_blocking(&features);
 |---|---|---|
 | `dialects` | yes | Full official Gherkin language catalog |
 | `colour` | yes | ANSI-coloured completion printer |
-| `prelude` | yes | `cutecumber::prelude` re-exports |
+| `prelude` | yes | `mizeria::prelude` re-exports |
 | `json` | no | Legacy Cucumber JSON reporter |

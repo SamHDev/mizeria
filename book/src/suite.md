@@ -6,7 +6,7 @@ definitions, optional scenario inits, and an optional reporter.
 ## Creating a suite
 
 ```rust,ignore
-use cutecumber::prelude::*;
+use mizeria::prelude::*;
 
 #[derive(Default)]
 struct World;
@@ -16,7 +16,7 @@ let mut suite = Suite::new(World::default);
 let mut suite = Suite::new(|| ());
 ```
 
-The factory is `fn() -> W`. Cutecumber calls it at the start of each scenario (and each
+The factory is `fn() -> W`. Mizeria calls it at the start of each scenario (and each
 Scenario Outline example), so every scenario gets a fresh world.
 
 ## Registering steps

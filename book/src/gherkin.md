@@ -1,6 +1,6 @@
 # Gherkin support
 
-Cutecumber parses `.feature` files with a built-in Gherkin AST. The runner understands
+Mizeria parses `.feature` files with a built-in Gherkin AST. The runner understands
 the structures you typically use in Cucumber suites.
 
 ## Feature layout

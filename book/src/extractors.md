@@ -1,7 +1,7 @@
 # Extractors
 
 Handlers declare their inputs as typed **extractors**, similar to Axum request
-extractors. Before the function body runs, Cutecumber walks the parameter list
+extractors. Before the function body runs, Mizeria walks the parameter list
 left-to-right and builds each value from a `StepContext`.
 
 ## `FromStep`

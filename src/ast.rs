@@ -8,7 +8,7 @@
 //! # Example
 //!
 //! ```
-//! use cutecumber::ast::{parse, FeatureChild};
+//! use mizeria::ast::{parse, FeatureChild};
 //!
 //! let source = "\
 //! Feature: Greeting

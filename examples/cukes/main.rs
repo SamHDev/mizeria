@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use cutecumber::prelude::*;
+use mizeria::prelude::*;
 
 #[derive(Default, Clone)]
 struct Cukes(u32);

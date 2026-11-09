@@ -1,6 +1,6 @@
 [book]
-title = "Cutecumber"
-description = "User guide for the Cutecumber BDD runner"
+title = "Mizeria"
+description = "User guide for the Mizeria BDD runner"
 src = "src"
 language = "en"
 

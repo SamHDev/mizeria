@@ -2,7 +2,7 @@
 
 `FeaturesBuilder` configures which paths to search. Calling `build()` discovers
 `.feature` files, parses them into an owned AST, and returns a loaded
-[`Features`](https://docs.rs/cutecumber) value for the suite to run.
+[`Features`](https://docs.rs/mizeria) value for the suite to run.
 
 Tag filtering is applied **in place** on that loaded value with `include` /
 `exclude`.
@@ -10,7 +10,7 @@ Tag filtering is applied **in place** on that loaded value with `include` /
 ## Builder
 
 ```rust,ignore
-use cutecumber::prelude::*;
+use mizeria::prelude::*;
 
 let mut features = Features::builder()
     .add_path("features")
@@ -67,7 +67,7 @@ Expressions support `and`, `or`, `not`, and parentheses (`@a or @b and @c` means
 For raw file contents without parsing:
 
 ```rust,ignore
-use cutecumber::prelude::*;
+use mizeria::prelude::*;
 use std::path::PathBuf;
 
 let sources = load_feature_sources(&[PathBuf::from("features")], true)?;

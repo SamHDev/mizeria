@@ -3,7 +3,7 @@
 [Introduction](introduction.md)
 [Quickstart](quickstart.md)
 
-# Using Cutecumber
+# Using Mizeria
 
 - [Suite](suite.md)
 - [Features](features.md)
