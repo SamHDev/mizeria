@@ -28,7 +28,7 @@ Each scenario (or each Scenario Outline example) contributes **one** counter:
 | Every step passed | `passed` |
 | A step handler / extractor failed | `failed` |
 | No step definition matched | `undefined` |
-| Feature load or parse failure | `failed` (run-level) |
+| Feature parse failure (see `Features::parse_errors`) | `failed` (run-level) |
 
 After a failed or undefined step, later steps in that scenario are skipped for
 listeners but do not change the scenario’s outcome category.

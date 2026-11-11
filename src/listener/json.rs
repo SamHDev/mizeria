@@ -62,7 +62,7 @@ impl JsonReporter<io::Stderr> {
     }
 }
 
-impl<W: Write + Send> Listener for JsonReporter<W> {
+impl<W: Write + Send + Sync> Listener for JsonReporter<W> {
     fn on_run_started(&mut self) {
         self.buffer.clear();
         self.step_started = None;

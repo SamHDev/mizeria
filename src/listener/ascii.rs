@@ -4,8 +4,11 @@ use std::io::{self, Write};
 
 use crate::outcome::Outcome;
 
+use crate::ast::ParseError;
+
 use super::buffer::{
-    FeatureRecord, ReportBuffer, ScenarioRecord, StepRecord, plural, tally_scenarios,
+    FeatureRecord, ParseErrorRecord, ReportBuffer, ScenarioRecord, StepRecord, plural,
+    tally_scenarios,
 };
 use super::{FeatureEvent, Listener, RuleEvent, ScenarioEvent, StepEvent, StepResult};
 
@@ -58,9 +61,13 @@ impl ASCIISyncPrinter<io::Stderr> {
     }
 }
 
-impl<W: Write + Send> Listener for ASCIISyncPrinter<W> {
+impl<W: Write + Send + Sync> Listener for ASCIISyncPrinter<W> {
     fn on_run_started(&mut self) {
         self.buffer.clear();
+    }
+
+    fn on_feature_parse_error(&mut self, uri: &str, error: &ParseError) {
+        self.buffer.on_feature_parse_error(uri, error);
     }
 
     fn on_feature_started(&mut self, event: &FeatureEvent<'_>) {
@@ -92,16 +99,34 @@ impl<W: Write + Send> Listener for ASCIISyncPrinter<W> {
     }
 
     fn on_run_finished(&mut self, outcome: &Outcome) {
-        let _ = write_report(&mut self.writer, self.buffer.features(), outcome);
+        let _ = write_report(
+            &mut self.writer,
+            self.buffer.parse_errors(),
+            self.buffer.features(),
+            outcome,
+        );
         let _ = self.writer.flush();
     }
 }
 
 fn write_report<W: Write>(
     writer: &mut W,
+    parse_errors: &[ParseErrorRecord],
     features: &[FeatureRecord],
     outcome: &Outcome,
 ) -> io::Result<()> {
+    if !parse_errors.is_empty() {
+        writeln!(writer, "Parse errors:")?;
+        for err in parse_errors {
+            writeln!(
+                writer,
+                "  {}:{}:{}: {}",
+                err.uri, err.line, err.column, err.message
+            )?;
+        }
+        writeln!(writer)?;
+    }
+
     for (i, feature) in features.iter().enumerate() {
         if i > 0 {
             writeln!(writer)?;
@@ -329,6 +354,7 @@ mod tests {
         printer.on_run_finished(&outcome);
 
         let text = String::from_utf8(printer.into_inner()).unwrap();
+        assert!(!text.contains("Parse errors:"));
         assert!(text.contains("Feature: Cukes  # features/cukes.feature"));
         assert!(text.contains("Scenario: eat"));
         assert!(text.contains("Given I have 2 cukes"));
@@ -336,5 +362,26 @@ mod tests {
         assert!(text.contains("expected 1, got 0"));
         assert!(text.contains("1 scenario (1 failed)"));
         assert!(text.contains("3 steps (2 passed, 1 failed)"));
+    }
+
+    #[test]
+    fn prints_feature_parse_errors() {
+        let mut printer = ASCIISyncPrinter::new(Vec::<u8>::new());
+        printer.on_run_started();
+        printer.on_feature_parse_error(
+            "features/bad.feature",
+            &ParseError::new(Location::new(5, 5), "expected Scenario, found Other"),
+        );
+        printer.on_run_finished(&Outcome {
+            passed: 0,
+            failed: 1,
+            skipped: 0,
+            undefined: 0,
+        });
+
+        let text = String::from_utf8(printer.into_inner()).unwrap();
+        assert!(text.contains("Parse errors:"));
+        assert!(text.contains("features/bad.feature:5:5: expected Scenario, found Other"));
+        assert!(text.contains("1 scenario (1 failed)"));
     }
 }

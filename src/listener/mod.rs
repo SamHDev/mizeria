@@ -21,7 +21,7 @@ pub use joined::Joined;
 #[cfg(feature = "json")]
 pub use json::JsonReporter;
 
-use crate::ast::Location;
+use crate::ast::{Location, ParseError};
 use crate::outcome::Outcome;
 
 /// Result of a finished step, for [`Listener::on_step_finished`].
@@ -87,12 +87,22 @@ pub struct StepEvent<'a> {
 }
 
 /// Observe suite execution. All methods have no-op defaults.
-pub trait Listener: Send {
+///
+/// `Sync` is required so suites can share step tables across threads while a
+/// concurrent run holds the reporter behind a mutex.
+pub trait Listener: Send + Sync {
     /// Called once before any features run.
     fn on_run_started(&mut self) {}
 
     /// Called once after all features finish (even on load failure).
     fn on_run_finished(&mut self, _outcome: &Outcome) {}
+
+    /// A feature file failed to parse during [`Features`](crate::features::Features) build.
+    ///
+    /// Emitted once per failed file at the start of a suite run (after
+    /// [`on_run_started`](Self::on_run_started)). Each failure is also counted in
+    /// [`Outcome::failed`](crate::outcome::Outcome::failed).
+    fn on_feature_parse_error(&mut self, _uri: &str, _error: &ParseError) {}
 
     /// A feature is about to execute.
     fn on_feature_started(&mut self, _event: &FeatureEvent<'_>) {}

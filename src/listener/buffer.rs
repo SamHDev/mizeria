@@ -1,14 +1,25 @@
 //! Shared event buffering for completion reporters.
 
+use crate::ast::ParseError;
+
 use super::{FeatureEvent, RuleEvent, ScenarioEvent, StepEvent, StepResult};
 
 /// Collects suite events until the run finishes, then exposes them for reporting.
 #[derive(Debug, Default)]
 pub(super) struct ReportBuffer {
+    parse_errors: Vec<ParseErrorRecord>,
     features: Vec<FeatureRecord>,
     open_feature: Option<usize>,
     open_rule: Option<usize>,
     open_scenario: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct ParseErrorRecord {
+    pub uri: String,
+    pub line: u32,
+    pub column: u32,
+    pub message: String,
 }
 
 #[derive(Debug)]
@@ -58,14 +69,28 @@ pub(super) struct StepRecord {
 
 impl ReportBuffer {
     pub fn clear(&mut self) {
+        self.parse_errors.clear();
         self.features.clear();
         self.open_feature = None;
         self.open_rule = None;
         self.open_scenario = false;
     }
 
+    pub fn parse_errors(&self) -> &[ParseErrorRecord] {
+        &self.parse_errors
+    }
+
     pub fn features(&self) -> &[FeatureRecord] {
         &self.features
+    }
+
+    pub fn on_feature_parse_error(&mut self, uri: &str, error: &ParseError) {
+        self.parse_errors.push(ParseErrorRecord {
+            uri: uri.to_owned(),
+            line: error.location.line,
+            column: error.location.column,
+            message: error.message.clone(),
+        });
     }
 
     pub fn on_feature_started(&mut self, event: &FeatureEvent<'_>) {

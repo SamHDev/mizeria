@@ -76,15 +76,38 @@ suite.with_reporter(Printer::stdout().symbols(true));
 
 ## Running
 
+Four entrypoints cover sync/async and sequential/concurrent scheduling. Concurrency is
+always at **scenario** granularity (including each Scenario Outline example). Steps
+inside a scenario stay sequential.
+
+| Mode | Method |
+|------|--------|
+| Async sequential | `suite.run(&features).await` |
+| Async concurrent | `suite.run_concurrent(max, &features).await` |
+| Sync sequential | `suite.run_blocking(&features)` |
+| Sync threaded | `suite.run_threaded(max, &features)` |
+
 ```rust,ignore
 let outcome = suite.run_blocking(&features);
 
+// OS threads, up to 8 scenarios at once:
+let outcome = suite.run_threaded(8, &features);
+
 // with an async runtime:
 let outcome = suite.run(&features).await;
+let outcome = suite.run_concurrent(8, &features).await;
 ```
 
-`run_blocking` uses a minimal executor (`pollster`). Prefer `run` when you already have
-Tokio (or similar) in the process.
+`run_blocking` / `run_threaded` drive async step bodies with a minimal executor
+(`pollster`) per step. Prefer `run` / `run_concurrent` when you already have Tokio (or
+similar) in the process.
+
+Tag a scenario (or feature / rule / Examples) with `@serial` so it runs alone under
+`run_concurrent` / `run_threaded` — no other scenario is in flight at the same time.
+Pass `max = 1` (or use the sequential entrypoints) for a fully serial suite.
+
+Reporters are shared behind a mutex in concurrent modes; step-level output may
+interleave. Completion printers remain the recommended default.
 
 After the run, inspect [`Outcome`](outcomes.md) and exit non-zero on failure if you are
 in a binary or CI test harness.

@@ -6,10 +6,12 @@ use std::str::FromStr;
 
 use console::Style;
 
+use crate::ast::ParseError;
 use crate::outcome::Outcome;
 
 use super::buffer::{
-    FeatureRecord, ReportBuffer, ScenarioRecord, StepRecord, plural, tally_scenarios,
+    FeatureRecord, ParseErrorRecord, ReportBuffer, ScenarioRecord, StepRecord, plural,
+    tally_scenarios,
 };
 use super::{FeatureEvent, Listener, RuleEvent, ScenarioEvent, StepEvent, StepResult};
 
@@ -204,9 +206,13 @@ impl ColourSyncPrinter<io::Stderr> {
     }
 }
 
-impl<W: Write + Send> Listener for ColourSyncPrinter<W> {
+impl<W: Write + Send + Sync> Listener for ColourSyncPrinter<W> {
     fn on_run_started(&mut self) {
         self.buffer.clear();
+    }
+
+    fn on_feature_parse_error(&mut self, uri: &str, error: &ParseError) {
+        self.buffer.on_feature_parse_error(uri, error);
     }
 
     fn on_feature_started(&mut self, event: &FeatureEvent<'_>) {
@@ -242,6 +248,7 @@ impl<W: Write + Send> Listener for ColourSyncPrinter<W> {
             &mut self.writer,
             &self.styles,
             self.symbols,
+            self.buffer.parse_errors(),
             self.buffer.features(),
             outcome,
         );
@@ -253,9 +260,19 @@ fn write_report<W: Write>(
     writer: &mut W,
     styles: &Styles,
     symbols: bool,
+    parse_errors: &[ParseErrorRecord],
     features: &[FeatureRecord],
     outcome: &Outcome,
 ) -> io::Result<()> {
+    if !parse_errors.is_empty() {
+        writeln!(writer, "{}", styles.err("Parse errors:"))?;
+        for err in parse_errors {
+            let line = format!("  {}:{}:{}: {}", err.uri, err.line, err.column, err.message);
+            writeln!(writer, "{}", styles.err(line))?;
+        }
+        writeln!(writer)?;
+    }
+
     for (i, feature) in features.iter().enumerate() {
         if i > 0 {
             writeln!(writer)?;

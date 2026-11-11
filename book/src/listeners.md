@@ -34,6 +34,7 @@ keeping the colour feature compiled in.
 All methods have no-op defaults:
 
 ```rust,ignore
+use mizeria::ast::ParseError;
 use mizeria::prelude::*;
 
 struct Counting {
@@ -44,6 +45,9 @@ impl Listener for Counting {
     fn on_run_started(&mut self) {}
     fn on_run_finished(&mut self, outcome: &Outcome) {
         eprintln!("done: {outcome:?}");
+    }
+    fn on_feature_parse_error(&mut self, uri: &str, error: &ParseError) {
+        eprintln!("parse error in {uri}: {error}");
     }
     fn on_feature_started(&mut self, event: &FeatureEvent<'_>) {
         eprintln!("feature {}", event.name);

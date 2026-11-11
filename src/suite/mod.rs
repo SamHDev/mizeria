@@ -1,37 +1,49 @@
 //! Suite entrypoint: register steps, attach a reporter, run features.
 
-use std::borrow::Cow;
+mod jobs;
+mod report;
+mod schedule;
+
 use std::future::Future;
 use std::marker::PhantomData;
 use std::pin::Pin;
 
-use crate::ast::{
-    Background, Feature, FeatureChild, KeywordType, Location, RuleChild, Scenario, Step,
-};
+use crate::ast::KeywordType;
 use crate::entity::EntityBag;
 use crate::extract::{StepArgument, StepContext};
-use crate::features::{Features, LoadedDocument};
+use crate::features::Features;
 use crate::handler::{Handler, HandlerMarker};
-use crate::listener::{FeatureEvent, Listener, RuleEvent, ScenarioEvent, StepEvent, StepResult};
+use crate::listener::{Listener, StepEvent, StepResult};
 use crate::lock::Locked;
 use crate::outcome::Outcome;
 use crate::response::StepOutcome;
 use crate::statement::{CaptureBag, EmptyCaptures, Statement};
 
-/// Which Gherkin keyword a step definition was registered under.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum StepKeyword {
-    /// `Given` / context step.
-    Given,
-    /// `When` / action step.
-    When,
-    /// `Then` / outcome step.
-    Then,
-    /// Keyword-agnostic step (matches any Given/When/Then/And/But text).
-    Step,
-}
+use jobs::{RunnableStep, ScenarioJob, collect_jobs};
+use report::Reporter;
+use schedule::{
+    restore_listener, run_jobs_concurrent_async, run_jobs_sequential_async,
+    run_jobs_sequential_sync, run_jobs_threaded, take_shared_listener,
+};
 
+/// Bitfield filter for which Gherkin keywords a step definition matches.
+///
+/// Single bits: [`Given`](Self::Given), [`When`](Self::When), [`Then`](Self::Then).
+/// [`Any`](Self::Any) is all three (`Given | When | Then`). Combine with `|`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct StepKeyword(u8);
+
+#[allow(non_upper_case_globals)] // Match former enum variant names.
 impl StepKeyword {
+    /// `Given` / context step.
+    pub const Given: Self = Self(1 << 0);
+    /// `When` / action step.
+    pub const When: Self = Self(1 << 1);
+    /// `Then` / outcome step.
+    pub const Then: Self = Self(1 << 2);
+    /// Keyword-agnostic filter (matches Given/When/Then).
+    pub const Any: Self = Self(Self::Given.0 | Self::When.0 | Self::Then.0);
+
     fn from_keyword_type(ty: KeywordType) -> Option<Self> {
         match ty {
             KeywordType::Context => Some(Self::Given),
@@ -41,21 +53,39 @@ impl StepKeyword {
         }
     }
 
-    fn matches_binding(self, binding: StepKeyword) -> bool {
-        match binding {
-            StepKeyword::Step => true,
-            other => other == self,
-        }
+    fn matches_binding(self, binding: Self) -> bool {
+        self.0 & binding.0 != 0
+    }
+}
+
+impl std::ops::BitOr for StepKeyword {
+    type Output = Self;
+
+    fn bitor(self, rhs: Self) -> Self {
+        Self(self.0 | rhs.0)
+    }
+}
+
+impl std::ops::BitOrAssign for StepKeyword {
+    fn bitor_assign(&mut self, rhs: Self) {
+        self.0 |= rhs.0;
     }
 }
 
 /// Sync or async step invocation without boxing sync handlers.
 enum StepDispatch<'a> {
     Done(StepOutcome),
-    Pending(Pin<Box<dyn Future<Output = StepOutcome> + 'a>>),
+    Pending(Pin<Box<dyn Future<Output = StepOutcome> + Send + 'a>>),
 }
 
 impl StepDispatch<'_> {
+    fn into_outcome_sync(self) -> StepOutcome {
+        match self {
+            Self::Done(outcome) => outcome,
+            Self::Pending(fut) => pollster::block_on(fut),
+        }
+    }
+
     async fn into_outcome(self) -> StepOutcome {
         match self {
             Self::Done(outcome) => outcome,
@@ -235,7 +265,7 @@ impl<W> Suite<W> {
         M: HandlerMarker + 'static,
         W: Send + Sync + 'static,
     {
-        self.push(StepKeyword::Step, statement, handler)
+        self.push(StepKeyword::Any, statement, handler)
     }
 
     fn push<S, T, M, H>(&mut self, keyword: StepKeyword, statement: S, handler: H) -> &mut Self
@@ -272,139 +302,174 @@ impl<W> Suite<W> {
         self.steps.iter().any(|s| s.matches(text).is_some())
     }
 
-    /// Async entrypoint: execute loaded features, notify the listener.
+    /// Async sequential run on the caller's runtime.
     pub async fn run(&mut self, features: &Features) -> Outcome
     where
         W: Send + Sync + 'static,
     {
-        self.run_inner(features).await
+        let jobs = collect_jobs(features);
+        let mut outcome = Outcome::new();
+        outcome.failed += features.parse_failures();
+
+        let mut listener = self.listener.take();
+        {
+            let mut reporter = Reporter::Exclusive(&mut listener);
+            reporter.on_run_started();
+            report_parse_errors(&mut reporter, features);
+            run_jobs_sequential_async(self, &jobs, &mut reporter, &mut outcome).await;
+            reporter.on_run_finished(&outcome);
+        }
+        self.listener = listener;
+        outcome
     }
 
-    /// Blocking entrypoint (uses a minimal executor).
+    /// Async concurrent run: up to `max` scenarios in flight on the caller's runtime.
+    ///
+    /// Scenarios tagged `@serial` run alone (no other scenario in flight). `max` of `0`
+    /// is treated as `1`.
+    pub async fn run_concurrent(&mut self, max: usize, features: &Features) -> Outcome
+    where
+        W: Send + Sync + 'static,
+    {
+        let jobs = collect_jobs(features);
+        let mut outcome = Outcome::new();
+        outcome.failed += features.parse_failures();
+
+        let (reporter, had_listener) = take_shared_listener(&mut self.listener);
+        {
+            let mut reporter = reporter.as_reporter();
+            reporter.on_run_started();
+            report_parse_errors(&mut reporter, features);
+        }
+        run_jobs_concurrent_async(self, &jobs, max, &reporter, &mut outcome).await;
+        reporter.emit(|l| l.on_run_finished(&outcome));
+        restore_listener(&mut self.listener, reporter, had_listener);
+        outcome
+    }
+
+    /// Sync sequential run. Async step bodies are driven with a minimal executor.
     pub fn run_blocking(&mut self, features: &Features) -> Outcome
     where
         W: Send + Sync + 'static,
     {
-        pollster::block_on(self.run_inner(features))
-    }
-
-    async fn run_inner(&mut self, features: &Features) -> Outcome
-    where
-        W: Send + Sync + 'static,
-    {
-        if let Some(listener) = self.listener.as_mut() {
-            listener.on_run_started();
-        }
-
+        let jobs = collect_jobs(features);
         let mut outcome = Outcome::new();
         outcome.failed += features.parse_failures();
 
-        for doc in features.documents() {
-            self.run_document(doc, &mut outcome).await;
+        let mut listener = self.listener.take();
+        {
+            let mut reporter = Reporter::Exclusive(&mut listener);
+            reporter.on_run_started();
+            report_parse_errors(&mut reporter, features);
+            run_jobs_sequential_sync(self, &jobs, &mut reporter, &mut outcome);
+            reporter.on_run_finished(&outcome);
         }
-
-        if let Some(listener) = self.listener.as_mut() {
-            listener.on_run_finished(&outcome);
-        }
-
+        self.listener = listener;
         outcome
     }
 
-    async fn run_document(&mut self, doc: &LoadedDocument, outcome: &mut Outcome)
+    /// Sync threaded run: up to `max` OS threads, each executing one scenario.
+    ///
+    /// Scenarios tagged `@serial` run alone. `max` of `0` is treated as `1`.
+    pub fn run_threaded(&mut self, max: usize, features: &Features) -> Outcome
     where
         W: Send + Sync + 'static,
     {
-        let feature: &Feature<'static> = &doc.feature;
+        let jobs = collect_jobs(features);
+        let mut outcome = Outcome::new();
+        outcome.failed += features.parse_failures();
 
-        let feature_event = FeatureEvent {
-            uri: &doc.uri,
-            name: feature.name.as_ref(),
-            keyword: feature.keyword.as_ref(),
-            location: feature.location,
-        };
-
-        if let Some(listener) = self.listener.as_mut() {
-            listener.on_feature_started(&feature_event);
+        let (reporter, had_listener) = take_shared_listener(&mut self.listener);
+        {
+            let mut reporter = reporter.as_reporter();
+            reporter.on_run_started();
+            report_parse_errors(&mut reporter, features);
         }
+        run_jobs_threaded(self, &jobs, max, &reporter, &mut outcome);
+        reporter.emit(|l| l.on_run_finished(&outcome));
+        restore_listener(&mut self.listener, reporter, had_listener);
+        outcome
+    }
 
-        let mut feature_bg: Option<&Background<'static>> = None;
+    pub(super) fn run_job_sync(
+        &self,
+        job: &ScenarioJob<'_>,
+        reporter: &mut Reporter<'_>,
+    ) -> ScenarioStatus
+    where
+        W: Send + Sync + 'static,
+    {
+        let scenario_event = job.scenario_event();
+        reporter.on_scenario_started(&scenario_event);
 
-        for child in &feature.children {
-            match child {
-                FeatureChild::Background(bg) => {
-                    feature_bg = Some(bg);
-                }
-                FeatureChild::Scenario(scenario) => {
-                    self.run_scenario(feature_bg, None, scenario, outcome).await;
-                }
-                FeatureChild::Rule(rule) => {
-                    let rule_event = RuleEvent {
-                        name: rule.name.as_ref(),
-                        keyword: rule.keyword.as_ref(),
-                        location: rule.location,
-                    };
-                    if let Some(listener) = self.listener.as_mut() {
-                        listener.on_rule_started(&rule_event);
-                    }
+        let world = Locked::new((self.world_factory)());
+        let mut entities = EntityBag::new();
+        let mut status = ScenarioStatus::Passed;
+        let mut skip_rest = false;
 
-                    let mut rule_bg: Option<&Background<'static>> = None;
-                    for child in &rule.children {
-                        match child {
-                            RuleChild::Background(bg) => rule_bg = Some(bg),
-                            RuleChild::Scenario(scenario) => {
-                                self.run_scenario(feature_bg, rule_bg, scenario, outcome)
-                                    .await;
-                            }
-                        }
-                    }
-
-                    if let Some(listener) = self.listener.as_mut() {
-                        listener.on_rule_finished(&rule_event);
-                    }
+        for init in &self.inits {
+            if skip_rest {
+                break;
+            }
+            let ctx = StepContext::new(world.clone(), &mut entities, EmptyCaptures, None);
+            match map_outcome(init.run(ctx).into_outcome_sync()) {
+                StepResult::Passed => {}
+                StepResult::Failed { .. } | StepResult::Undefined | StepResult::Skipped => {
+                    status = ScenarioStatus::Failed;
+                    skip_rest = true;
                 }
             }
         }
 
-        if let Some(listener) = self.listener.as_mut() {
-            listener.on_feature_finished(&feature_event);
+        let mut effective_keyword: Option<StepKeyword> = None;
+        for step in &job.steps {
+            if let Some(kw) = StepKeyword::from_keyword_type(step.keyword_type) {
+                effective_keyword = Some(kw);
+            }
+
+            let step_event = StepEvent {
+                keyword: step.keyword.as_ref(),
+                text: step.text.as_ref(),
+                location: step.location,
+            };
+            reporter.on_step_started(&step_event);
+
+            let result = if skip_rest {
+                StepResult::Skipped
+            } else {
+                self.execute_step_sync(&world, &mut entities, step, effective_keyword)
+            };
+
+            match &result {
+                StepResult::Passed => {}
+                StepResult::Failed { .. } => {
+                    status = ScenarioStatus::Failed;
+                    skip_rest = true;
+                }
+                StepResult::Undefined => {
+                    status = ScenarioStatus::Undefined;
+                    skip_rest = true;
+                }
+                StepResult::Skipped => {}
+            }
+
+            reporter.on_step_finished(&step_event, &result);
         }
+
+        reporter.on_scenario_finished(&scenario_event);
+        status
     }
 
-    async fn run_scenario(
-        &mut self,
-        feature_bg: Option<&Background<'static>>,
-        rule_bg: Option<&Background<'static>>,
-        scenario: &Scenario<'static>,
-        outcome: &mut Outcome,
-    ) where
+    pub(super) async fn run_job_async(
+        &self,
+        job: &ScenarioJob<'_>,
+        reporter: &mut Reporter<'_>,
+    ) -> ScenarioStatus
+    where
         W: Send + Sync + 'static,
     {
-        let examples = expand_examples(scenario);
-        for example in examples {
-            self.run_example(feature_bg, rule_bg, scenario, &example, outcome)
-                .await;
-        }
-    }
-
-    async fn run_example(
-        &mut self,
-        feature_bg: Option<&Background<'static>>,
-        rule_bg: Option<&Background<'static>>,
-        scenario: &Scenario<'static>,
-        example: &ExampleRow,
-        outcome: &mut Outcome,
-    ) where
-        W: Send + Sync + 'static,
-    {
-        let scenario_event = ScenarioEvent {
-            name: scenario.name.as_ref(),
-            keyword: scenario.keyword.as_ref(),
-            location: scenario.location,
-        };
-
-        if let Some(listener) = self.listener.as_mut() {
-            listener.on_scenario_started(&scenario_event);
-        }
+        let scenario_event = job.scenario_event();
+        reporter.on_scenario_started(&scenario_event);
 
         let world = Locked::new((self.world_factory)());
         let mut entities = EntityBag::new();
@@ -418,28 +483,15 @@ impl<W> Suite<W> {
             let ctx = StepContext::new(world.clone(), &mut entities, EmptyCaptures, None);
             match map_outcome(init.run(ctx).into_outcome().await) {
                 StepResult::Passed => {}
-                StepResult::Failed { .. } => {
-                    status = ScenarioStatus::Failed;
-                    skip_rest = true;
-                }
-                StepResult::Undefined | StepResult::Skipped => {
+                StepResult::Failed { .. } | StepResult::Undefined | StepResult::Skipped => {
                     status = ScenarioStatus::Failed;
                     skip_rest = true;
                 }
             }
         }
 
-        let mut steps = Vec::new();
-        if let Some(bg) = feature_bg {
-            steps.extend(bg.steps.iter().map(|s| runnable_step(s, example)));
-        }
-        if let Some(bg) = rule_bg {
-            steps.extend(bg.steps.iter().map(|s| runnable_step(s, example)));
-        }
-        steps.extend(scenario.steps.iter().map(|s| runnable_step(s, example)));
-
         let mut effective_keyword: Option<StepKeyword> = None;
-        for step in &steps {
+        for step in &job.steps {
             if let Some(kw) = StepKeyword::from_keyword_type(step.keyword_type) {
                 effective_keyword = Some(kw);
             }
@@ -449,15 +501,12 @@ impl<W> Suite<W> {
                 text: step.text.as_ref(),
                 location: step.location,
             };
-
-            if let Some(listener) = self.listener.as_mut() {
-                listener.on_step_started(&step_event);
-            }
+            reporter.on_step_started(&step_event);
 
             let result = if skip_rest {
                 StepResult::Skipped
             } else {
-                self.execute_step(&world, &mut entities, step, effective_keyword)
+                self.execute_step_async(&world, &mut entities, step, effective_keyword)
                     .await
             };
 
@@ -474,23 +523,14 @@ impl<W> Suite<W> {
                 StepResult::Skipped => {}
             }
 
-            if let Some(listener) = self.listener.as_mut() {
-                listener.on_step_finished(&step_event, &result);
-            }
+            reporter.on_step_finished(&step_event, &result);
         }
 
-        match status {
-            ScenarioStatus::Passed => outcome.passed += 1,
-            ScenarioStatus::Failed => outcome.failed += 1,
-            ScenarioStatus::Undefined => outcome.undefined += 1,
-        }
-
-        if let Some(listener) = self.listener.as_mut() {
-            listener.on_scenario_finished(&scenario_event);
-        }
+        reporter.on_scenario_finished(&scenario_event);
+        status
     }
 
-    async fn execute_step(
+    fn execute_step_sync(
         &self,
         world: &Locked<W>,
         entities: &mut EntityBag,
@@ -500,29 +540,59 @@ impl<W> Suite<W> {
     where
         W: Send + Sync + 'static,
     {
-        let Some((binding, captures)) = self.steps.iter().find_map(|binding| {
-            if let Some(kw) = effective_keyword
-                && !kw.matches_binding(binding.keyword())
-            {
-                return None;
-            }
-            binding
-                .matches(step.text.as_ref())
-                .map(|caps| (binding, caps))
-        }) else {
+        let Some((binding, captures)) = find_binding(&self.steps, step, effective_keyword) else {
             return StepResult::Undefined;
         };
 
-        let argument = if let Some(doc) = step.doc_string.as_ref() {
-            Some(StepArgument::DocString(doc.as_ref()))
-        } else {
-            step.table
-                .as_ref()
-                .map(|table| StepArgument::DataTable(table.as_slice()))
+        let argument = step_argument(step);
+        let ctx = StepContext::new(world.clone(), entities, captures.view(), argument);
+        map_outcome(binding.run(ctx).into_outcome_sync())
+    }
+
+    async fn execute_step_async(
+        &self,
+        world: &Locked<W>,
+        entities: &mut EntityBag,
+        step: &RunnableStep<'_>,
+        effective_keyword: Option<StepKeyword>,
+    ) -> StepResult
+    where
+        W: Send + Sync + 'static,
+    {
+        let Some((binding, captures)) = find_binding(&self.steps, step, effective_keyword) else {
+            return StepResult::Undefined;
         };
 
+        let argument = step_argument(step);
         let ctx = StepContext::new(world.clone(), entities, captures.view(), argument);
         map_outcome(binding.run(ctx).into_outcome().await)
+    }
+}
+
+fn find_binding<'a, W>(
+    steps: &'a [Box<dyn DynStep<W>>],
+    step: &RunnableStep<'_>,
+    effective_keyword: Option<StepKeyword>,
+) -> Option<(&'a dyn DynStep<W>, CaptureBag)> {
+    steps.iter().find_map(|binding| {
+        if let Some(kw) = effective_keyword
+            && !kw.matches_binding(binding.keyword())
+        {
+            return None;
+        }
+        binding
+            .matches(step.text.as_ref())
+            .map(|caps| (binding.as_ref(), caps))
+    })
+}
+
+fn step_argument<'a>(step: &'a RunnableStep<'_>) -> Option<StepArgument<'a>> {
+    if let Some(doc) = step.doc_string.as_ref() {
+        Some(StepArgument::DocString(doc.as_ref()))
+    } else {
+        step.table
+            .as_ref()
+            .map(|table| StepArgument::DataTable(table.as_slice()))
     }
 }
 
@@ -535,138 +605,33 @@ fn map_outcome(outcome: StepOutcome) -> StepResult {
     }
 }
 
+fn report_parse_errors(reporter: &mut Reporter<'_>, features: &Features) {
+    for err in features.parse_errors() {
+        reporter.on_feature_parse_error(&err.uri, &err.error);
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum ScenarioStatus {
+pub(super) enum ScenarioStatus {
     Passed,
     Failed,
     Undefined,
 }
 
-#[derive(Debug, Default)]
-struct ExampleRow {
-    /// `(needle, value)` where needle is already `"<key>"`.
-    values: Vec<(String, String)>,
-}
-
-impl ExampleRow {
-    fn needs_substitution(&self) -> bool {
-        !self.values.is_empty()
-    }
-
-    fn substitute<'a>(&'a self, text: &'a str) -> Cow<'a, str> {
-        if self.values.is_empty() || !text.contains('<') {
-            return Cow::Borrowed(text);
-        }
-        let mut out = text.to_owned();
-        for (needle, value) in &self.values {
-            if out.contains(needle.as_str()) {
-                out = out.replace(needle.as_str(), value);
-            }
-        }
-        Cow::Owned(out)
-    }
-}
-
-#[derive(Debug)]
-struct RunnableStep<'a> {
-    keyword: Cow<'a, str>,
-    keyword_type: KeywordType,
-    text: Cow<'a, str>,
-    location: Location,
-    doc_string: Option<Cow<'a, str>>,
-    table: Option<Vec<Vec<String>>>,
-}
-
-fn runnable_step<'a>(step: &'a Step<'static>, example: &ExampleRow) -> RunnableStep<'a> {
-    let substitute = example.needs_substitution();
-    let text = if substitute {
-        Cow::Owned(example.substitute(step.text.as_ref()).into_owned())
-    } else {
-        Cow::Borrowed(step.text.as_ref())
-    };
-
-    let doc_string = step.doc_string.as_ref().map(|doc| {
-        let content = doc.content();
-        if substitute {
-            Cow::Owned(example.substitute(content.as_ref()).into_owned())
-        } else {
-            content
-        }
-    });
-
-    let table = step.data_table.as_ref().map(|table| {
-        table
-            .rows
-            .iter()
-            .map(|row| {
-                row.cells
-                    .iter()
-                    .map(|cell| {
-                        if substitute {
-                            example.substitute(cell.value.as_ref()).into_owned()
-                        } else {
-                            cell.value.as_ref().to_owned()
-                        }
-                    })
-                    .collect()
-            })
-            .collect()
-    });
-
-    RunnableStep {
-        keyword: Cow::Borrowed(step.keyword.as_ref()),
-        keyword_type: step.keyword_type,
-        text,
-        location: step.location,
-        doc_string,
-        table,
-    }
-}
-
-fn expand_examples(scenario: &Scenario<'static>) -> Vec<ExampleRow> {
-    if scenario.examples.is_empty() {
-        return vec![ExampleRow::default()];
-    }
-
-    let mut rows = Vec::new();
-    for examples in &scenario.examples {
-        let Some(header) = examples.table_header.as_ref() else {
-            continue;
-        };
-        let needles: Vec<String> = header
-            .cells
-            .iter()
-            .map(|c| format!("<{}>", c.value.as_ref()))
-            .collect();
-
-        for body in &examples.table_body {
-            let mut values = Vec::new();
-            for (needle, cell) in needles.iter().zip(body.cells.iter()) {
-                values.push((needle.clone(), cell.value.as_ref().to_owned()));
-            }
-            rows.push(ExampleRow { values });
-        }
-    }
-
-    if rows.is_empty() {
-        vec![ExampleRow::default()]
-    } else {
-        rows
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    #[cfg(feature = "regex")]
     use crate::extract::CtxMut;
-    use crate::listener::{Listener, Printer};
+    use crate::listener::{Listener, Printer, ScenarioEvent, StepEvent};
     use crate::outcome::Outcome;
     #[cfg(feature = "regex")]
     use crate::statement::Regex;
     use std::fs;
     use std::path::PathBuf;
+    use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::{Arc, Mutex};
+    use std::thread;
+    use std::time::Duration;
 
     #[derive(Default)]
     struct World {
@@ -825,7 +790,7 @@ Feature: X
 
         assert_eq!(suite.step_count(), 4);
         assert_eq!(suite.step_keyword(0), Some(StepKeyword::Given));
-        assert_eq!(suite.step_keyword(3), Some(StepKeyword::Step));
+        assert_eq!(suite.step_keyword(3), Some(StepKeyword::Any));
         assert!(suite.has_match("a user exists"));
         assert!(suite.has_match("they are ready"));
 
@@ -982,5 +947,136 @@ Feature: And
 
         assert!(outcome.is_ok(), "{outcome:?}");
         assert_eq!(outcome.passed, 1);
+    }
+
+    fn multi_scenario_features(dir: &std::path::Path, n: usize) -> Features {
+        let mut body = String::from("Feature: Parallel\n");
+        for i in 0..n {
+            body.push_str(&format!("\n  Scenario: s{i}\n    Given a step\n"));
+        }
+        let feature = write_feature(dir, "parallel.feature", &body);
+        Features::builder().add_path(&feature).build().unwrap()
+    }
+
+    #[test]
+    fn run_threaded_isolates_worlds() {
+        let dir = std::env::temp_dir().join(format!("mizeria-threaded-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        let features = multi_scenario_features(&dir, 8);
+
+        let mut suite = Suite::new(|| AtomicUsize::new(0));
+        suite.given("a step", |world: CtxMut<AtomicUsize>| {
+            let prev = world.fetch_add(1, Ordering::SeqCst);
+            assert_eq!(prev, 0, "world must be fresh per scenario");
+            thread::sleep(Duration::from_millis(5));
+        });
+
+        let outcome = suite.run_threaded(4, &features);
+        let _ = fs::remove_dir_all(&dir);
+
+        assert!(outcome.is_ok(), "{outcome:?}");
+        assert_eq!(outcome.passed, 8);
+    }
+
+    #[tokio::test]
+    async fn run_concurrent_isolates_worlds() {
+        let dir = std::env::temp_dir().join(format!("mizeria-conc-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        let features = multi_scenario_features(&dir, 8);
+
+        let mut suite = Suite::new(|| AtomicUsize::new(0));
+        suite.given("a step", async |world: CtxMut<AtomicUsize>| {
+            let prev = world.fetch_add(1, Ordering::SeqCst);
+            assert_eq!(prev, 0, "world must be fresh per scenario");
+            tokio::task::yield_now().await;
+        });
+
+        let outcome = suite.run_concurrent(4, &features).await;
+        let _ = fs::remove_dir_all(&dir);
+
+        assert!(outcome.is_ok(), "{outcome:?}");
+        assert_eq!(outcome.passed, 8);
+    }
+
+    #[test]
+    fn serial_tag_runs_alone_threaded() {
+        let dir = std::env::temp_dir().join(format!("mizeria-serial-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        let feature = write_feature(
+            &dir,
+            "serial.feature",
+            "\
+Feature: Serial
+  Scenario: a
+    Given track
+  Scenario: b
+    Given track
+  @serial
+  Scenario: alone
+    Given track serial
+  Scenario: c
+    Given track
+  Scenario: d
+    Given track
+",
+        );
+        let features = Features::builder().add_path(&feature).build().unwrap();
+        let in_flight = Arc::new(AtomicUsize::new(0));
+        let max_in_flight = Arc::new(AtomicUsize::new(0));
+        let serial_saw = Arc::new(AtomicUsize::new(0));
+
+        let mut suite = Suite::new(|| ());
+        {
+            let in_flight = Arc::clone(&in_flight);
+            let max_in_flight = Arc::clone(&max_in_flight);
+            suite.given("track", move || {
+                let now = in_flight.fetch_add(1, Ordering::SeqCst) + 1;
+                max_in_flight.fetch_max(now, Ordering::SeqCst);
+                thread::sleep(Duration::from_millis(20));
+                in_flight.fetch_sub(1, Ordering::SeqCst);
+            });
+        }
+        {
+            let in_flight = Arc::clone(&in_flight);
+            let serial_saw = Arc::clone(&serial_saw);
+            suite.given("track serial", move || {
+                serial_saw.store(in_flight.load(Ordering::SeqCst), Ordering::SeqCst);
+                // During a @serial scenario the scheduler should not have other jobs running.
+                // in_flight counts this step too once we increment — check peers before sleep.
+                thread::sleep(Duration::from_millis(20));
+            });
+        }
+
+        let outcome = suite.run_threaded(4, &features);
+        let _ = fs::remove_dir_all(&dir);
+
+        assert!(outcome.is_ok(), "{outcome:?}");
+        assert_eq!(outcome.passed, 5);
+        assert_eq!(
+            serial_saw.load(Ordering::SeqCst),
+            0,
+            "no other scenarios should be in flight when @serial starts"
+        );
+        assert!(
+            max_in_flight.load(Ordering::SeqCst) > 1,
+            "non-serial batch should overlap"
+        );
+    }
+
+    #[test]
+    fn concurrent_modes_match_sequential_counts() {
+        let dir = std::env::temp_dir().join(format!("mizeria-parity-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        let features = multi_scenario_features(&dir, 5);
+
+        let mut suite = Suite::new(|| ());
+        suite.given("a step", || {});
+
+        let blocking = suite.run_blocking(&features);
+        let threaded = suite.run_threaded(3, &features);
+
+        assert_eq!(blocking, threaded);
+        assert_eq!(blocking.passed, 5);
+        let _ = fs::remove_dir_all(&dir);
     }
 }

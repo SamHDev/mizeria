@@ -1,27 +1,26 @@
 // @generated from gherkin-languages.json — do not edit by hand
 use super::Dialect;
 
-#[cfg(not(feature = "dialects"))]
-pub(super) static DIALECTS: &[Dialect] = &[Dialect {
-    code: "en",
-    name: "English",
-    native: "English",
-    feature: &["Feature", "Business Need", "Ability"],
-    rule: &["Rule"],
-    background: &["Background"],
-    scenario: &["Example", "Scenario"],
-    scenario_outline: &["Scenario Outline", "Scenario Template"],
-    examples: &["Examples", "Scenarios"],
-    given: &["* ", "Given "],
-    when: &["* ", "When "],
-    then: &["* ", "Then "],
-    and: &["* ", "And "],
-    but: &["* ", "But "],
-}];
+impl Dialect {
+    pub const EN: Dialect = Dialect {
+        code: "en",
+        name: "English",
+        native: "English",
+        feature: &["Feature", "Business Need", "Ability"],
+        rule: &["Rule"],
+        background: &["Background"],
+        scenario: &["Example", "Scenario"],
+        scenario_outline: &["Scenario Outline", "Scenario Template"],
+        examples: &["Examples", "Scenarios"],
+        given: &["* ", "Given "],
+        when: &["* ", "When "],
+        then: &["* ", "Then "],
+        and: &["* ", "And "],
+        but: &["* ", "But "],
+    };
 
-#[cfg(feature = "dialects")]
-pub(super) static DIALECTS: &[Dialect] = &[
-    Dialect {
+    #[cfg(feature = "dialects")]
+    pub const AF: Dialect = Dialect {
         code: "af",
         name: "Afrikaans",
         native: "Afrikaans",
@@ -36,8 +35,10 @@ pub(super) static DIALECTS: &[Dialect] = &[
         then: &["* ", "Dan "],
         and: &["* ", "En "],
         but: &["* ", "Maar "],
-    },
-    Dialect {
+    };
+
+    #[cfg(feature = "dialects")]
+    pub const AM: Dialect = Dialect {
         code: "am",
         name: "Armenian",
         native: "հայերեն",
@@ -52,8 +53,10 @@ pub(super) static DIALECTS: &[Dialect] = &[
         then: &["* ", "Ապա "],
         and: &["* ", "Եվ "],
         but: &["* ", "Բայց "],
-    },
-    Dialect {
+    };
+
+    #[cfg(feature = "dialects")]
+    pub const AMH: Dialect = Dialect {
         code: "amh",
         name: "Amharic",
         native: "አማርኛ",
@@ -68,8 +71,10 @@ pub(super) static DIALECTS: &[Dialect] = &[
         then: &["* ", "ከዚያ "],
         and: &["* ", "እና "],
         but: &["* ", "ግን "],
-    },
-    Dialect {
+    };
+
+    #[cfg(feature = "dialects")]
+    pub const AN: Dialect = Dialect {
         code: "an",
         name: "Aragonese",
         native: "Aragonés",
@@ -84,8 +89,10 @@ pub(super) static DIALECTS: &[Dialect] = &[
         then: &["* ", "Alavez ", "Allora ", "Antonces "],
         and: &["* ", "Y ", "E "],
         but: &["* ", "Pero "],
-    },
-    Dialect {
+    };
+
+    #[cfg(feature = "dialects")]
+    pub const AR: Dialect = Dialect {
         code: "ar",
         name: "Arabic",
         native: "العربية",
@@ -100,8 +107,10 @@ pub(super) static DIALECTS: &[Dialect] = &[
         then: &["* ", "اذاً ", "ثم "],
         and: &["* ", "و "],
         but: &["* ", "لكن "],
-    },
-    Dialect {
+    };
+
+    #[cfg(feature = "dialects")]
+    pub const AST: Dialect = Dialect {
         code: "ast",
         name: "Asturian",
         native: "asturianu",
@@ -116,8 +125,10 @@ pub(super) static DIALECTS: &[Dialect] = &[
         then: &["* ", "Entós "],
         and: &["* ", "Y ", "Ya "],
         but: &["* ", "Peru "],
-    },
-    Dialect {
+    };
+
+    #[cfg(feature = "dialects")]
+    pub const AZ: Dialect = Dialect {
         code: "az",
         name: "Azerbaijani",
         native: "Azərbaycanca",
@@ -132,8 +143,10 @@ pub(super) static DIALECTS: &[Dialect] = &[
         then: &["* ", "O halda "],
         and: &["* ", "Və ", "Həm "],
         but: &["* ", "Amma ", "Ancaq "],
-    },
-    Dialect {
+    };
+
+    #[cfg(feature = "dialects")]
+    pub const BE: Dialect = Dialect {
         code: "be",
         name: "Belarusian",
         native: "Беларуская",
@@ -148,8 +161,10 @@ pub(super) static DIALECTS: &[Dialect] = &[
         then: &["* ", "Тады "],
         and: &["* ", "I ", "Ды ", "Таксама "],
         but: &["* ", "Але ", "Інакш "],
-    },
-    Dialect {
+    };
+
+    #[cfg(feature = "dialects")]
+    pub const BG: Dialect = Dialect {
         code: "bg",
         name: "Bulgarian",
         native: "български",
@@ -164,8 +179,10 @@ pub(super) static DIALECTS: &[Dialect] = &[
         then: &["* ", "То "],
         and: &["* ", "И "],
         but: &["* ", "Но "],
-    },
-    Dialect {
+    };
+
+    #[cfg(feature = "dialects")]
+    pub const BM: Dialect = Dialect {
         code: "bm",
         name: "Malay",
         native: "Bahasa Melayu",
@@ -185,8 +202,10 @@ pub(super) static DIALECTS: &[Dialect] = &[
         then: &["* ", "Maka ", "Kemudian "],
         and: &["* ", "Dan "],
         but: &["* ", "Tetapi ", "Tapi "],
-    },
-    Dialect {
+    };
+
+    #[cfg(feature = "dialects")]
+    pub const BS: Dialect = Dialect {
         code: "bs",
         name: "Bosnian",
         native: "Bosanski",
@@ -201,8 +220,10 @@ pub(super) static DIALECTS: &[Dialect] = &[
         then: &["* ", "Zatim "],
         and: &["* ", "I ", "A "],
         but: &["* ", "Ali "],
-    },
-    Dialect {
+    };
+
+    #[cfg(feature = "dialects")]
+    pub const CA: Dialect = Dialect {
         code: "ca",
         name: "Catalan",
         native: "català",
@@ -217,8 +238,10 @@ pub(super) static DIALECTS: &[Dialect] = &[
         then: &["* ", "Aleshores ", "Cal "],
         and: &["* ", "I "],
         but: &["* ", "Però "],
-    },
-    Dialect {
+    };
+
+    #[cfg(feature = "dialects")]
+    pub const CS: Dialect = Dialect {
         code: "cs",
         name: "Czech",
         native: "Česky",
@@ -233,8 +256,10 @@ pub(super) static DIALECTS: &[Dialect] = &[
         then: &["* ", "Pak "],
         and: &["* ", "A také ", "A "],
         but: &["* ", "Ale "],
-    },
-    Dialect {
+    };
+
+    #[cfg(feature = "dialects")]
+    pub const CY_GB: Dialect = Dialect {
         code: "cy-GB",
         name: "Welsh",
         native: "Cymraeg",
@@ -249,8 +274,10 @@ pub(super) static DIALECTS: &[Dialect] = &[
         then: &["* ", "Yna "],
         and: &["* ", "A "],
         but: &["* ", "Ond "],
-    },
-    Dialect {
+    };
+
+    #[cfg(feature = "dialects")]
+    pub const DA: Dialect = Dialect {
         code: "da",
         name: "Danish",
         native: "dansk",
@@ -265,8 +292,10 @@ pub(super) static DIALECTS: &[Dialect] = &[
         then: &["* ", "Så "],
         and: &["* ", "Og "],
         but: &["* ", "Men "],
-    },
-    Dialect {
+    };
+
+    #[cfg(feature = "dialects")]
+    pub const DE: Dialect = Dialect {
         code: "de",
         name: "German",
         native: "Deutsch",
@@ -286,8 +315,10 @@ pub(super) static DIALECTS: &[Dialect] = &[
         then: &["* ", "Dann "],
         and: &["* ", "Und "],
         but: &["* ", "Aber "],
-    },
-    Dialect {
+    };
+
+    #[cfg(feature = "dialects")]
+    pub const EL: Dialect = Dialect {
         code: "el",
         name: "Greek",
         native: "Ελληνικά",
@@ -302,8 +333,10 @@ pub(super) static DIALECTS: &[Dialect] = &[
         then: &["* ", "Τότε "],
         and: &["* ", "Και "],
         but: &["* ", "Αλλά "],
-    },
-    Dialect {
+    };
+
+    #[cfg(feature = "dialects")]
+    pub const EM: Dialect = Dialect {
         code: "em",
         name: "Emoji",
         native: "😀",
@@ -318,24 +351,10 @@ pub(super) static DIALECTS: &[Dialect] = &[
         then: &["* ", "🙏"],
         and: &["* ", "😂"],
         but: &["* ", "😔"],
-    },
-    Dialect {
-        code: "en",
-        name: "English",
-        native: "English",
-        feature: &["Feature", "Business Need", "Ability"],
-        rule: &["Rule"],
-        background: &["Background"],
-        scenario: &["Example", "Scenario"],
-        scenario_outline: &["Scenario Outline", "Scenario Template"],
-        examples: &["Examples", "Scenarios"],
-        given: &["* ", "Given "],
-        when: &["* ", "When "],
-        then: &["* ", "Then "],
-        and: &["* ", "And "],
-        but: &["* ", "But "],
-    },
-    Dialect {
+    };
+
+    #[cfg(feature = "dialects")]
+    pub const EN_SCOUSE: Dialect = Dialect {
         code: "en-Scouse",
         name: "Scouse",
         native: "Scouse",
@@ -350,8 +369,10 @@ pub(super) static DIALECTS: &[Dialect] = &[
         then: &["* ", "Dun ", "Den youse gotta "],
         and: &["* ", "An "],
         but: &["* ", "Buh "],
-    },
-    Dialect {
+    };
+
+    #[cfg(feature = "dialects")]
+    pub const EN_AU: Dialect = Dialect {
         code: "en-au",
         name: "Australian",
         native: "Australian",
@@ -366,8 +387,10 @@ pub(super) static DIALECTS: &[Dialect] = &[
         then: &["* ", "But at the end of the day I reckon "],
         and: &["* ", "Too right "],
         but: &["* ", "Yeah nah "],
-    },
-    Dialect {
+    };
+
+    #[cfg(feature = "dialects")]
+    pub const EN_LOL: Dialect = Dialect {
         code: "en-lol",
         name: "LOLCAT",
         native: "LOLCAT",
@@ -382,8 +405,10 @@ pub(super) static DIALECTS: &[Dialect] = &[
         then: &["* ", "DEN "],
         and: &["* ", "AN "],
         but: &["* ", "BUT "],
-    },
-    Dialect {
+    };
+
+    #[cfg(feature = "dialects")]
+    pub const EN_OLD: Dialect = Dialect {
         code: "en-old",
         name: "Old English",
         native: "Englisc",
@@ -406,8 +431,10 @@ pub(super) static DIALECTS: &[Dialect] = &[
         then: &["* ", "Tha ", "Þa ", "Ða ", "Tha the ", "Þa þe ", "Ða ðe "],
         and: &["* ", "Ond ", "7 "],
         but: &["* ", "Ac "],
-    },
-    Dialect {
+    };
+
+    #[cfg(feature = "dialects")]
+    pub const EN_PIRATE: Dialect = Dialect {
         code: "en-pirate",
         name: "Pirate",
         native: "Pirate",
@@ -422,8 +449,10 @@ pub(super) static DIALECTS: &[Dialect] = &[
         then: &["* ", "Let go and haul "],
         and: &["* ", "Aye "],
         but: &["* ", "Avast! "],
-    },
-    Dialect {
+    };
+
+    #[cfg(feature = "dialects")]
+    pub const EN_TX: Dialect = Dialect {
         code: "en-tx",
         name: "Texas",
         native: "Texas",
@@ -438,8 +467,10 @@ pub(super) static DIALECTS: &[Dialect] = &[
         then: &["There’s no tree but bears some fruit "],
         and: &["Come hell or high water "],
         but: &["Well now hold on, I'll you what "],
-    },
-    Dialect {
+    };
+
+    #[cfg(feature = "dialects")]
+    pub const EO: Dialect = Dialect {
         code: "eo",
         name: "Esperanto",
         native: "Esperanto",
@@ -454,8 +485,10 @@ pub(super) static DIALECTS: &[Dialect] = &[
         then: &["* ", "Do "],
         and: &["* ", "Kaj "],
         but: &["* ", "Sed "],
-    },
-    Dialect {
+    };
+
+    #[cfg(feature = "dialects")]
+    pub const ES: Dialect = Dialect {
         code: "es",
         name: "Spanish",
         native: "español",
@@ -470,8 +503,10 @@ pub(super) static DIALECTS: &[Dialect] = &[
         then: &["* ", "Entonces "],
         and: &["* ", "Y ", "E "],
         but: &["* ", "Pero "],
-    },
-    Dialect {
+    };
+
+    #[cfg(feature = "dialects")]
+    pub const ET: Dialect = Dialect {
         code: "et",
         name: "Estonian",
         native: "eesti keel",
@@ -486,8 +521,10 @@ pub(super) static DIALECTS: &[Dialect] = &[
         then: &["* ", "Siis "],
         and: &["* ", "Ja "],
         but: &["* ", "Kuid "],
-    },
-    Dialect {
+    };
+
+    #[cfg(feature = "dialects")]
+    pub const FA: Dialect = Dialect {
         code: "fa",
         name: "Persian",
         native: "فارسی",
@@ -502,8 +539,10 @@ pub(super) static DIALECTS: &[Dialect] = &[
         then: &["* ", "آنگاه ", "سپس ", "انتظار می رود "],
         and: &["* ", "و "],
         but: &["* ", "اما "],
-    },
-    Dialect {
+    };
+
+    #[cfg(feature = "dialects")]
+    pub const FI: Dialect = Dialect {
         code: "fi",
         name: "Finnish",
         native: "suomi",
@@ -518,8 +557,10 @@ pub(super) static DIALECTS: &[Dialect] = &[
         then: &["* ", "Niin "],
         and: &["* ", "Ja "],
         but: &["* ", "Mutta "],
-    },
-    Dialect {
+    };
+
+    #[cfg(feature = "dialects")]
+    pub const FR: Dialect = Dialect {
         code: "fr",
         name: "French",
         native: "français",
@@ -552,8 +593,10 @@ pub(super) static DIALECTS: &[Dialect] = &[
         then: &["* ", "Alors ", "Donc "],
         and: &["* ", "Et que ", "Et qu'", "Et "],
         but: &["* ", "Mais que ", "Mais qu'", "Mais "],
-    },
-    Dialect {
+    };
+
+    #[cfg(feature = "dialects")]
+    pub const GA: Dialect = Dialect {
         code: "ga",
         name: "Irish",
         native: "Gaeilge",
@@ -574,8 +617,10 @@ pub(super) static DIALECTS: &[Dialect] = &[
         then: &["* ", "Ansin "],
         and: &["* ", "Agus "],
         but: &["* ", "Ach "],
-    },
-    Dialect {
+    };
+
+    #[cfg(feature = "dialects")]
+    pub const GJ: Dialect = Dialect {
         code: "gj",
         name: "Gujarati",
         native: "ગુજરાતી",
@@ -590,8 +635,10 @@ pub(super) static DIALECTS: &[Dialect] = &[
         then: &["* ", "પછી "],
         and: &["* ", "અને "],
         but: &["* ", "પણ "],
-    },
-    Dialect {
+    };
+
+    #[cfg(feature = "dialects")]
+    pub const GL: Dialect = Dialect {
         code: "gl",
         name: "Galician",
         native: "galego",
@@ -606,8 +653,10 @@ pub(super) static DIALECTS: &[Dialect] = &[
         then: &["* ", "Entón ", "Logo "],
         and: &["* ", "E "],
         but: &["* ", "Mais ", "Pero "],
-    },
-    Dialect {
+    };
+
+    #[cfg(feature = "dialects")]
+    pub const HE: Dialect = Dialect {
         code: "he",
         name: "Hebrew",
         native: "עברית",
@@ -622,8 +671,10 @@ pub(super) static DIALECTS: &[Dialect] = &[
         then: &["* ", "אז ", "אזי "],
         and: &["* ", "וגם "],
         but: &["* ", "אבל "],
-    },
-    Dialect {
+    };
+
+    #[cfg(feature = "dialects")]
+    pub const HI: Dialect = Dialect {
         code: "hi",
         name: "Hindi",
         native: "हिंदी",
@@ -638,8 +689,10 @@ pub(super) static DIALECTS: &[Dialect] = &[
         then: &["* ", "तब ", "तदा "],
         and: &["* ", "और ", "तथा "],
         but: &["* ", "पर ", "परन्तु ", "किन्तु "],
-    },
-    Dialect {
+    };
+
+    #[cfg(feature = "dialects")]
+    pub const HR: Dialect = Dialect {
         code: "hr",
         name: "Croatian",
         native: "hrvatski",
@@ -654,8 +707,10 @@ pub(super) static DIALECTS: &[Dialect] = &[
         then: &["* ", "Onda "],
         and: &["* ", "I "],
         but: &["* ", "Ali "],
-    },
-    Dialect {
+    };
+
+    #[cfg(feature = "dialects")]
+    pub const HT: Dialect = Dialect {
         code: "ht",
         name: "Creole",
         native: "kreyòl",
@@ -677,8 +732,10 @@ pub(super) static DIALECTS: &[Dialect] = &[
         then: &["* ", "Lè sa a ", "Le sa a "],
         and: &["* ", "Ak ", "Epi ", "E "],
         but: &["* ", "Men "],
-    },
-    Dialect {
+    };
+
+    #[cfg(feature = "dialects")]
+    pub const HU: Dialect = Dialect {
         code: "hu",
         name: "Hungarian",
         native: "magyar",
@@ -693,8 +750,10 @@ pub(super) static DIALECTS: &[Dialect] = &[
         then: &["* ", "Akkor "],
         and: &["* ", "És "],
         but: &["* ", "De "],
-    },
-    Dialect {
+    };
+
+    #[cfg(feature = "dialects")]
+    pub const ID: Dialect = Dialect {
         code: "id",
         name: "Indonesian",
         native: "Bahasa Indonesia",
@@ -716,8 +775,10 @@ pub(super) static DIALECTS: &[Dialect] = &[
         then: &["* ", "Maka ", "Kemudian "],
         and: &["* ", "Dan "],
         but: &["* ", "Tapi ", "Tetapi "],
-    },
-    Dialect {
+    };
+
+    #[cfg(feature = "dialects")]
+    pub const IS: Dialect = Dialect {
         code: "is",
         name: "Icelandic",
         native: "Íslenska",
@@ -732,8 +793,10 @@ pub(super) static DIALECTS: &[Dialect] = &[
         then: &["* ", "Þá "],
         and: &["* ", "Og "],
         but: &["* ", "En "],
-    },
-    Dialect {
+    };
+
+    #[cfg(feature = "dialects")]
+    pub const IT: Dialect = Dialect {
         code: "it",
         name: "Italian",
         native: "italiano",
@@ -748,8 +811,10 @@ pub(super) static DIALECTS: &[Dialect] = &[
         then: &["* ", "Allora "],
         and: &["* ", "E ", "Ed "],
         but: &["* ", "Ma "],
-    },
-    Dialect {
+    };
+
+    #[cfg(feature = "dialects")]
+    pub const JA: Dialect = Dialect {
         code: "ja",
         name: "Japanese",
         native: "日本語",
@@ -769,8 +834,10 @@ pub(super) static DIALECTS: &[Dialect] = &[
         then: &["* ", "ならば"],
         and: &["* ", "且つ", "かつ"],
         but: &["* ", "然し", "しかし", "但し", "ただし"],
-    },
-    Dialect {
+    };
+
+    #[cfg(feature = "dialects")]
+    pub const JV: Dialect = Dialect {
         code: "jv",
         name: "Javanese",
         native: "Basa Jawa",
@@ -785,8 +852,10 @@ pub(super) static DIALECTS: &[Dialect] = &[
         then: &["* ", "Njuk ", "Banjur "],
         and: &["* ", "Lan "],
         but: &["* ", "Tapi ", "Nanging ", "Ananging "],
-    },
-    Dialect {
+    };
+
+    #[cfg(feature = "dialects")]
+    pub const KA: Dialect = Dialect {
         code: "ka",
         name: "Georgian",
         native: "ქართული",
@@ -801,8 +870,10 @@ pub(super) static DIALECTS: &[Dialect] = &[
         then: &["* ", "მაშინ "],
         and: &["* ", "და ", "ასევე "],
         but: &["* ", "მაგრამ ", "თუმცა "],
-    },
-    Dialect {
+    };
+
+    #[cfg(feature = "dialects")]
+    pub const KN: Dialect = Dialect {
         code: "kn",
         name: "Kannada",
         native: "ಕನ್ನಡ",
@@ -817,8 +888,10 @@ pub(super) static DIALECTS: &[Dialect] = &[
         then: &["* ", "ನಂತರ "],
         and: &["* ", "ಮತ್ತು "],
         but: &["* ", "ಆದರೆ "],
-    },
-    Dialect {
+    };
+
+    #[cfg(feature = "dialects")]
+    pub const KO: Dialect = Dialect {
         code: "ko",
         name: "Korean",
         native: "한국어",
@@ -833,8 +906,10 @@ pub(super) static DIALECTS: &[Dialect] = &[
         then: &["* ", "그러면 "],
         and: &["* ", "그리고 "],
         but: &["* ", "하지만 ", "단 "],
-    },
-    Dialect {
+    };
+
+    #[cfg(feature = "dialects")]
+    pub const LT: Dialect = Dialect {
         code: "lt",
         name: "Lithuanian",
         native: "lietuvių kalba",
@@ -849,8 +924,10 @@ pub(super) static DIALECTS: &[Dialect] = &[
         then: &["* ", "Tada "],
         and: &["* ", "Ir "],
         but: &["* ", "Bet "],
-    },
-    Dialect {
+    };
+
+    #[cfg(feature = "dialects")]
+    pub const LU: Dialect = Dialect {
         code: "lu",
         name: "Luxemburgish",
         native: "Lëtzebuergesch",
@@ -865,8 +942,10 @@ pub(super) static DIALECTS: &[Dialect] = &[
         then: &["* ", "dann "],
         and: &["* ", "an ", "a "],
         but: &["* ", "awer ", "mä "],
-    },
-    Dialect {
+    };
+
+    #[cfg(feature = "dialects")]
+    pub const LV: Dialect = Dialect {
         code: "lv",
         name: "Latvian",
         native: "latviešu",
@@ -881,8 +960,10 @@ pub(super) static DIALECTS: &[Dialect] = &[
         then: &["* ", "Tad "],
         and: &["* ", "Un "],
         but: &["* ", "Bet "],
-    },
-    Dialect {
+    };
+
+    #[cfg(feature = "dialects")]
+    pub const MK_CYRL: Dialect = Dialect {
         code: "mk-Cyrl",
         name: "Macedonian",
         native: "Македонски",
@@ -897,8 +978,10 @@ pub(super) static DIALECTS: &[Dialect] = &[
         then: &["* ", "Тогаш "],
         and: &["* ", "И "],
         but: &["* ", "Но "],
-    },
-    Dialect {
+    };
+
+    #[cfg(feature = "dialects")]
+    pub const MK_LATN: Dialect = Dialect {
         code: "mk-Latn",
         name: "Macedonian (Latin)",
         native: "Makedonski (Latinica)",
@@ -913,8 +996,10 @@ pub(super) static DIALECTS: &[Dialect] = &[
         then: &["* ", "Togash "],
         and: &["* ", "I "],
         but: &["* ", "No "],
-    },
-    Dialect {
+    };
+
+    #[cfg(feature = "dialects")]
+    pub const ML: Dialect = Dialect {
         code: "ml",
         name: "Malayalam",
         native: "മലയാളം",
@@ -929,8 +1014,10 @@ pub(super) static DIALECTS: &[Dialect] = &[
         then: &["* ", "പിന്നെ"],
         and: &["* ", "ഒപ്പം"],
         but: &["* ", "പക്ഷേ"],
-    },
-    Dialect {
+    };
+
+    #[cfg(feature = "dialects")]
+    pub const MN: Dialect = Dialect {
         code: "mn",
         name: "Mongolian",
         native: "монгол",
@@ -945,8 +1032,10 @@ pub(super) static DIALECTS: &[Dialect] = &[
         then: &["* ", "Тэгэхэд ", "Үүний дараа "],
         and: &["* ", "Мөн ", "Тэгээд "],
         but: &["* ", "Гэхдээ ", "Харин "],
-    },
-    Dialect {
+    };
+
+    #[cfg(feature = "dialects")]
+    pub const MR: Dialect = Dialect {
         code: "mr",
         name: "Marathi",
         native: "मराठी",
@@ -961,8 +1050,10 @@ pub(super) static DIALECTS: &[Dialect] = &[
         then: &["* ", "मग ", "तेव्हा "],
         and: &["* ", "आणि ", "तसेच "],
         but: &["* ", "पण ", "परंतु "],
-    },
-    Dialect {
+    };
+
+    #[cfg(feature = "dialects")]
+    pub const NE: Dialect = Dialect {
         code: "ne",
         name: "Nepali",
         native: "नेपाली",
@@ -977,8 +1068,10 @@ pub(super) static DIALECTS: &[Dialect] = &[
         then: &["* ", "त्यसपछि ", "अनी "],
         and: &["* ", "र ", "अनि "],
         but: &["* ", "तर "],
-    },
-    Dialect {
+    };
+
+    #[cfg(feature = "dialects")]
+    pub const NL: Dialect = Dialect {
         code: "nl",
         name: "Dutch",
         native: "Nederlands",
@@ -993,8 +1086,10 @@ pub(super) static DIALECTS: &[Dialect] = &[
         then: &["* ", "Dan "],
         and: &["* ", "En "],
         but: &["* ", "Maar "],
-    },
-    Dialect {
+    };
+
+    #[cfg(feature = "dialects")]
+    pub const NO: Dialect = Dialect {
         code: "no",
         name: "Norwegian",
         native: "norsk",
@@ -1009,8 +1104,10 @@ pub(super) static DIALECTS: &[Dialect] = &[
         then: &["* ", "Så "],
         and: &["* ", "Og "],
         but: &["* ", "Men "],
-    },
-    Dialect {
+    };
+
+    #[cfg(feature = "dialects")]
+    pub const PA: Dialect = Dialect {
         code: "pa",
         name: "Panjabi",
         native: "ਪੰਜਾਬੀ",
@@ -1025,8 +1122,10 @@ pub(super) static DIALECTS: &[Dialect] = &[
         then: &["* ", "ਤਦ "],
         and: &["* ", "ਅਤੇ "],
         but: &["* ", "ਪਰ "],
-    },
-    Dialect {
+    };
+
+    #[cfg(feature = "dialects")]
+    pub const PL: Dialect = Dialect {
         code: "pl",
         name: "Polish",
         native: "polski",
@@ -1041,8 +1140,10 @@ pub(super) static DIALECTS: &[Dialect] = &[
         then: &["* ", "Wtedy "],
         and: &["* ", "Oraz ", "I "],
         but: &["* ", "Ale "],
-    },
-    Dialect {
+    };
+
+    #[cfg(feature = "dialects")]
+    pub const PT: Dialect = Dialect {
         code: "pt",
         name: "Portuguese",
         native: "português",
@@ -1062,8 +1163,10 @@ pub(super) static DIALECTS: &[Dialect] = &[
         then: &["* ", "Então ", "Entao "],
         and: &["* ", "E "],
         but: &["* ", "Mas "],
-    },
-    Dialect {
+    };
+
+    #[cfg(feature = "dialects")]
+    pub const RO: Dialect = Dialect {
         code: "ro",
         name: "Romanian",
         native: "română",
@@ -1086,8 +1189,10 @@ pub(super) static DIALECTS: &[Dialect] = &[
         then: &["* ", "Atunci "],
         and: &["* ", "Si ", "Și ", "Şi "],
         but: &["* ", "Dar "],
-    },
-    Dialect {
+    };
+
+    #[cfg(feature = "dialects")]
+    pub const RU: Dialect = Dialect {
         code: "ru",
         name: "Russian",
         native: "русский",
@@ -1108,8 +1213,10 @@ pub(super) static DIALECTS: &[Dialect] = &[
         then: &["* ", "То ", "Затем ", "Тогда "],
         and: &["* ", "И ", "К тому же ", "Также "],
         but: &["* ", "Но ", "А ", "Иначе "],
-    },
-    Dialect {
+    };
+
+    #[cfg(feature = "dialects")]
+    pub const SK: Dialect = Dialect {
         code: "sk",
         name: "Slovak",
         native: "Slovensky",
@@ -1124,8 +1231,10 @@ pub(super) static DIALECTS: &[Dialect] = &[
         then: &["* ", "Tak ", "Potom "],
         and: &["* ", "A ", "A tiež ", "A taktiež ", "A zároveň "],
         but: &["* ", "Ale "],
-    },
-    Dialect {
+    };
+
+    #[cfg(feature = "dialects")]
+    pub const SL: Dialect = Dialect {
         code: "sl",
         name: "Slovenian",
         native: "Slovenski",
@@ -1153,8 +1262,10 @@ pub(super) static DIALECTS: &[Dialect] = &[
         then: &["Nato ", "Potem ", "Takrat "],
         and: &["In ", "Ter "],
         but: &["Toda ", "Ampak ", "Vendar "],
-    },
-    Dialect {
+    };
+
+    #[cfg(feature = "dialects")]
+    pub const SR_CYRL: Dialect = Dialect {
         code: "sr-Cyrl",
         name: "Serbian",
         native: "Српски",
@@ -1169,8 +1280,10 @@ pub(super) static DIALECTS: &[Dialect] = &[
         then: &["* ", "Онда "],
         and: &["* ", "И "],
         but: &["* ", "Али "],
-    },
-    Dialect {
+    };
+
+    #[cfg(feature = "dialects")]
+    pub const SR_LATN: Dialect = Dialect {
         code: "sr-Latn",
         name: "Serbian (Latin)",
         native: "Srpski (Latinica)",
@@ -1185,8 +1298,10 @@ pub(super) static DIALECTS: &[Dialect] = &[
         then: &["* ", "Onda "],
         and: &["* ", "I "],
         but: &["* ", "Ali "],
-    },
-    Dialect {
+    };
+
+    #[cfg(feature = "dialects")]
+    pub const SV: Dialect = Dialect {
         code: "sv",
         name: "Swedish",
         native: "Svenska",
@@ -1201,8 +1316,10 @@ pub(super) static DIALECTS: &[Dialect] = &[
         then: &["* ", "Så "],
         and: &["* ", "Och "],
         but: &["* ", "Men "],
-    },
-    Dialect {
+    };
+
+    #[cfg(feature = "dialects")]
+    pub const TA: Dialect = Dialect {
         code: "ta",
         name: "Tamil",
         native: "தமிழ்",
@@ -1217,8 +1334,10 @@ pub(super) static DIALECTS: &[Dialect] = &[
         then: &["* ", "அப்பொழுது "],
         and: &["* ", "மேலும் ", "மற்றும் "],
         but: &["* ", "ஆனால் "],
-    },
-    Dialect {
+    };
+
+    #[cfg(feature = "dialects")]
+    pub const TE: Dialect = Dialect {
         code: "te",
         name: "Telugu",
         native: "తెలుగు",
@@ -1233,8 +1352,10 @@ pub(super) static DIALECTS: &[Dialect] = &[
         then: &["* ", "అప్పుడు "],
         and: &["* ", "మరియు "],
         but: &["* ", "కాని "],
-    },
-    Dialect {
+    };
+
+    #[cfg(feature = "dialects")]
+    pub const TH: Dialect = Dialect {
         code: "th",
         name: "Thai",
         native: "ไทย",
@@ -1249,8 +1370,10 @@ pub(super) static DIALECTS: &[Dialect] = &[
         then: &["* ", "ดังนั้น "],
         and: &["* ", "และ "],
         but: &["* ", "แต่ "],
-    },
-    Dialect {
+    };
+
+    #[cfg(feature = "dialects")]
+    pub const TLH: Dialect = Dialect {
         code: "tlh",
         name: "Klingon",
         native: "tlhIngan",
@@ -1265,8 +1388,10 @@ pub(super) static DIALECTS: &[Dialect] = &[
         then: &["* ", "vaj "],
         and: &["* ", "'ej ", "latlh "],
         but: &["* ", "'ach ", "'a "],
-    },
-    Dialect {
+    };
+
+    #[cfg(feature = "dialects")]
+    pub const TR: Dialect = Dialect {
         code: "tr",
         name: "Turkish",
         native: "Türkçe",
@@ -1351,8 +1476,10 @@ pub(super) static DIALECTS: &[Dialect] = &[
             "Buna mukabil ",
             "Aksi halde ",
         ],
-    },
-    Dialect {
+    };
+
+    #[cfg(feature = "dialects")]
+    pub const TT: Dialect = Dialect {
         code: "tt",
         name: "Tatar",
         native: "Татарча",
@@ -1367,8 +1494,10 @@ pub(super) static DIALECTS: &[Dialect] = &[
         then: &["* ", "Нәтиҗәдә "],
         and: &["* ", "Һәм ", "Вә "],
         but: &["* ", "Ләкин ", "Әмма "],
-    },
-    Dialect {
+    };
+
+    #[cfg(feature = "dialects")]
+    pub const UK: Dialect = Dialect {
         code: "uk",
         name: "Ukrainian",
         native: "Українська",
@@ -1383,8 +1512,10 @@ pub(super) static DIALECTS: &[Dialect] = &[
         then: &["* ", "То ", "Тоді "],
         and: &["* ", "І ", "А також ", "Та "],
         but: &["* ", "Але "],
-    },
-    Dialect {
+    };
+
+    #[cfg(feature = "dialects")]
+    pub const UR: Dialect = Dialect {
         code: "ur",
         name: "Urdu",
         native: "اردو",
@@ -1399,8 +1530,10 @@ pub(super) static DIALECTS: &[Dialect] = &[
         then: &["* ", "پھر ", "تب "],
         and: &["* ", "اور "],
         but: &["* ", "لیکن "],
-    },
-    Dialect {
+    };
+
+    #[cfg(feature = "dialects")]
+    pub const UZ: Dialect = Dialect {
         code: "uz",
         name: "Uzbek",
         native: "Узбекча",
@@ -1415,8 +1548,10 @@ pub(super) static DIALECTS: &[Dialect] = &[
         then: &["* ", "Унда "],
         and: &["* ", "Ва "],
         but: &["* ", "Лекин ", "Бирок ", "Аммо "],
-    },
-    Dialect {
+    };
+
+    #[cfg(feature = "dialects")]
+    pub const VI: Dialect = Dialect {
         code: "vi",
         name: "Vietnamese",
         native: "Tiếng Việt",
@@ -1431,8 +1566,10 @@ pub(super) static DIALECTS: &[Dialect] = &[
         then: &["* ", "Thì "],
         and: &["* ", "Và "],
         but: &["* ", "Nhưng "],
-    },
-    Dialect {
+    };
+
+    #[cfg(feature = "dialects")]
+    pub const ZH_CN: Dialect = Dialect {
         code: "zh-CN",
         name: "Chinese simplified",
         native: "简体中文",
@@ -1447,8 +1584,10 @@ pub(super) static DIALECTS: &[Dialect] = &[
         then: &["* ", "那么"],
         and: &["* ", "而且", "并且", "同时"],
         but: &["* ", "但是"],
-    },
-    Dialect {
+    };
+
+    #[cfg(feature = "dialects")]
+    pub const ZH_TW: Dialect = Dialect {
         code: "zh-TW",
         name: "Chinese traditional",
         native: "繁體中文",
@@ -1463,5 +1602,92 @@ pub(super) static DIALECTS: &[Dialect] = &[
         then: &["* ", "那麼"],
         and: &["* ", "而且", "並且", "同時"],
         but: &["* ", "但是"],
-    },
+    };
+}
+
+#[cfg(not(feature = "dialects"))]
+pub(super) static DIALECTS: &[Dialect] = &[Dialect::EN];
+
+#[cfg(feature = "dialects")]
+pub(super) static DIALECTS: &[Dialect] = &[
+    Dialect::AF,
+    Dialect::AM,
+    Dialect::AMH,
+    Dialect::AN,
+    Dialect::AR,
+    Dialect::AST,
+    Dialect::AZ,
+    Dialect::BE,
+    Dialect::BG,
+    Dialect::BM,
+    Dialect::BS,
+    Dialect::CA,
+    Dialect::CS,
+    Dialect::CY_GB,
+    Dialect::DA,
+    Dialect::DE,
+    Dialect::EL,
+    Dialect::EM,
+    Dialect::EN,
+    Dialect::EN_SCOUSE,
+    Dialect::EN_AU,
+    Dialect::EN_LOL,
+    Dialect::EN_OLD,
+    Dialect::EN_PIRATE,
+    Dialect::EN_TX,
+    Dialect::EO,
+    Dialect::ES,
+    Dialect::ET,
+    Dialect::FA,
+    Dialect::FI,
+    Dialect::FR,
+    Dialect::GA,
+    Dialect::GJ,
+    Dialect::GL,
+    Dialect::HE,
+    Dialect::HI,
+    Dialect::HR,
+    Dialect::HT,
+    Dialect::HU,
+    Dialect::ID,
+    Dialect::IS,
+    Dialect::IT,
+    Dialect::JA,
+    Dialect::JV,
+    Dialect::KA,
+    Dialect::KN,
+    Dialect::KO,
+    Dialect::LT,
+    Dialect::LU,
+    Dialect::LV,
+    Dialect::MK_CYRL,
+    Dialect::MK_LATN,
+    Dialect::ML,
+    Dialect::MN,
+    Dialect::MR,
+    Dialect::NE,
+    Dialect::NL,
+    Dialect::NO,
+    Dialect::PA,
+    Dialect::PL,
+    Dialect::PT,
+    Dialect::RO,
+    Dialect::RU,
+    Dialect::SK,
+    Dialect::SL,
+    Dialect::SR_CYRL,
+    Dialect::SR_LATN,
+    Dialect::SV,
+    Dialect::TA,
+    Dialect::TE,
+    Dialect::TH,
+    Dialect::TLH,
+    Dialect::TR,
+    Dialect::TT,
+    Dialect::UK,
+    Dialect::UR,
+    Dialect::UZ,
+    Dialect::VI,
+    Dialect::ZH_CN,
+    Dialect::ZH_TW,
 ];

@@ -12,7 +12,7 @@ pub use crate::extract::{
     Ctx, CtxMut, CtxRef, DataTable, DocString, FromCapture, FromRow, FromStep, Param, StepArgument,
     StepContext, parse_from_str,
 };
-pub use crate::features::{Features, FeaturesBuilder, LoadedDocument};
+pub use crate::features::{FeatureParseError, Features, FeaturesBuilder, LoadedDocument};
 pub use crate::handler::{Call, Handler, HandlerMarker, IntoStepFuture, call};
 #[cfg(feature = "json")]
 pub use crate::listener::JsonReporter;

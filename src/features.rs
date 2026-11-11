@@ -1,9 +1,10 @@
 //! Feature discovery, loading, and in-place tag filtering.
 
 use std::collections::HashSet;
+use std::fmt;
 use std::path::{Path, PathBuf};
 
-use crate::ast::{self, Feature, FeatureChild, Rule, RuleChild, Scenario, Tag};
+use crate::ast::{self, Feature, FeatureChild, ParseError, Rule, RuleChild, Scenario, Tag};
 use crate::loader::{self, LoadError};
 use crate::tags::Tags;
 
@@ -16,6 +17,27 @@ pub struct LoadedDocument {
     pub feature: Feature<'static>,
 }
 
+/// A feature file that could not be parsed while building [`Features`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FeatureParseError {
+    /// Path or URI of the feature file.
+    pub uri: String,
+    /// Underlying lex/parse error.
+    pub error: ParseError,
+}
+
+impl fmt::Display for FeatureParseError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}:{}", self.uri, self.error)
+    }
+}
+
+impl std::error::Error for FeatureParseError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        Some(&self.error)
+    }
+}
+
 /// Loaded feature documents (owned ASTs).
 ///
 /// Built via [`FeaturesBuilder`]; tag-filter with [`Features::include`] /
@@ -24,7 +46,7 @@ pub struct LoadedDocument {
 pub struct Features {
     documents: Vec<LoadedDocument>,
     /// Files that failed to parse while building (counted toward run failures).
-    parse_failures: usize,
+    parse_errors: Vec<FeatureParseError>,
 }
 
 impl Features {
@@ -38,9 +60,14 @@ impl Features {
         &self.documents
     }
 
+    /// Feature files that failed to parse during [`FeaturesBuilder::build`].
+    pub fn parse_errors(&self) -> &[FeatureParseError] {
+        &self.parse_errors
+    }
+
     /// Number of feature files that failed to parse during [`FeaturesBuilder::build`].
     pub fn parse_failures(&self) -> usize {
-        self.parse_failures
+        self.parse_errors.len()
     }
 
     /// Keep only scenarios / Examples that match `tags`. Mutates in place.
@@ -122,7 +149,7 @@ impl FeaturesBuilder {
             .collect();
         let sources = loader::read_feature_sources(&filtered)?;
         let mut documents = Vec::new();
-        let mut parse_failures = 0;
+        let mut parse_errors = Vec::new();
 
         for source in sources {
             match ast::parse(&source.source) {
@@ -135,15 +162,18 @@ impl FeaturesBuilder {
                         feature: feature.into_owned(),
                     });
                 }
-                Err(_) => {
-                    parse_failures += 1;
+                Err(error) => {
+                    parse_errors.push(FeatureParseError {
+                        uri: source.uri,
+                        error,
+                    });
                 }
             }
         }
 
         Ok(Features {
             documents,
-            parse_failures,
+            parse_errors,
         })
     }
 
@@ -394,6 +424,39 @@ Feature: Outline
 
     fn feature_uris(features: &Features) -> Vec<String> {
         features.documents().iter().map(|d| d.uri.clone()).collect()
+    }
+
+    #[test]
+    fn records_parse_errors_without_aborting_build() {
+        let dir = std::env::temp_dir().join(format!("mizeria-parse-err-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        write_feature(
+            &dir,
+            "ok.feature",
+            "Feature: Ok\n  Scenario: s\n    Given a step\n",
+        );
+        write_feature(
+            &dir,
+            "bad.feature",
+            "Feature: Bad\n  Scenarioo: typo\n    Given a step\n",
+        );
+
+        let features = Features::builder().add_path(&dir).build().unwrap();
+        assert_eq!(features.documents().len(), 1);
+        assert_eq!(features.parse_failures(), 1);
+        assert_eq!(features.parse_errors().len(), 1);
+        assert!(
+            features.parse_errors()[0].uri.contains("bad.feature"),
+            "{:?}",
+            features.parse_errors()[0]
+        );
+        assert!(
+            !features.parse_errors()[0].error.message.is_empty(),
+            "{:?}",
+            features.parse_errors()[0]
+        );
+
+        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]

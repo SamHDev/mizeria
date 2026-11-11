@@ -76,8 +76,11 @@ for source in &sources {
 }
 ```
 
-Parse failures during `build()` are recorded on `Features::parse_failures` and
-counted as failed toward the suite [`Outcome`](outcomes.md).
+Parse failures during `build()` are recorded on `Features::parse_errors` (also
+`Features::parse_failures` for the count). Suite runs emit each one via
+`Listener::on_feature_parse_error`, the built-in printers show them under
+**Parse errors:**, and each failure is counted as failed toward the suite
+[`Outcome`](outcomes.md).
 
 ## Empty runs
 

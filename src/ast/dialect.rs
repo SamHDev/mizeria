@@ -49,7 +49,7 @@ impl Dialect {
 
     /// English (`"en"`) dialect. Always available, even without the `dialects` feature.
     pub fn english() -> &'static Dialect {
-        Self::get("en").expect("english dialect")
+        &Self::EN
     }
 
     /// Match `keyword:` title lines. Returns `(keyword_without_colon, trimmed_title)`.
@@ -85,6 +85,18 @@ impl Dialect {
             }
         }
         best
+    }
+
+    /// All title-line keywords (`Feature`, `Rule`, `Scenario`, …) for this dialect.
+    pub fn title_keywords(&self) -> impl Iterator<Item = &'static str> + '_ {
+        self.feature
+            .iter()
+            .chain(self.rule.iter())
+            .chain(self.background.iter())
+            .chain(self.scenario.iter())
+            .chain(self.scenario_outline.iter())
+            .chain(self.examples.iter())
+            .copied()
     }
 
     /// Match a `Feature:` title line.

@@ -4,7 +4,8 @@
 //! Register [`Given`](suite::Suite::given) / [`When`](suite::Suite::when) / [`Then`](suite::Suite::then) /
 //! [`step`](suite::Suite::step) handlers on a [`Suite`](suite::Suite), optionally
 //! [`init`](suite::Suite::init) per-scenario setup, point it at [`.feature`](features::Features)
-//! files, and [`run`](suite::Suite::run) or [`run_blocking`](suite::Suite::run_blocking). Handlers
+//! files, and [`run`](suite::Suite::run) / [`run_concurrent`](suite::Suite::run_concurrent) or
+//! [`run_blocking`](suite::Suite::run_blocking) / [`run_threaded`](suite::Suite::run_threaded). Handlers
 //! pull typed values from a [`StepContext`](extract::StepContext) via extractors such as capture
 //! params, [`CtxMut`](extract::CtxMut) world leases, and scenario [`entity`] values.
 //!

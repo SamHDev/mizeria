@@ -1,5 +1,6 @@
 //! Compose two [`Listener`]s into one.
 
+use crate::ast::ParseError;
 use crate::outcome::Outcome;
 
 use super::{FeatureEvent, Listener, RuleEvent, ScenarioEvent, StepEvent, StepResult};
@@ -25,6 +26,11 @@ impl<A: Listener, B: Listener> Listener for Joined<A, B> {
     fn on_run_finished(&mut self, outcome: &Outcome) {
         self.0.on_run_finished(outcome);
         self.1.on_run_finished(outcome);
+    }
+
+    fn on_feature_parse_error(&mut self, uri: &str, error: &ParseError) {
+        self.0.on_feature_parse_error(uri, error);
+        self.1.on_feature_parse_error(uri, error);
     }
 
     fn on_feature_started(&mut self, event: &FeatureEvent<'_>) {

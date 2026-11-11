@@ -103,7 +103,7 @@ impl<'s> Parser<'s> {
         };
         self.skip_ignored();
         if !self.check(TokenKind::Eof) {
-            return Err(self.err("expected end of file"));
+            return Err(self.unexpected_token("end of file"));
         }
         Ok(GherkinDocument {
             feature,
@@ -422,6 +422,9 @@ impl<'s> Parser<'s> {
         loop {
             match self.peek().kind {
                 TokenKind::Other => {
+                    if let Some(err) = self.keyword_typo_error(self.peek()) {
+                        return Err(err);
+                    }
                     let tok = self.advance();
                     let text = tok.text;
                     if let Some(off) = offset_of(self.source, text) {
@@ -609,16 +612,131 @@ impl<'s> Parser<'s> {
             self.advance();
             Ok(())
         } else {
-            Err(ParseError::new(
-                self.peek().location,
-                format!("expected {:?}, found {:?}", kind, self.peek().kind),
-            ))
+            Err(self.unexpected_token(&format!("{kind:?}")))
         }
     }
 
     fn err(&self, message: &str) -> ParseError {
         ParseError::new(self.peek().location, message)
     }
+
+    fn unexpected_token(&self, expected: &str) -> ParseError {
+        if let Some(err) = self.keyword_typo_error(self.peek()) {
+            return err;
+        }
+        ParseError::new(
+            self.peek().location,
+            format!("expected {expected}, found {}", describe_token(self.peek())),
+        )
+    }
+
+    /// If `tok` looks like a mistyped title keyword (`Foo:`), suggest the closest match.
+    fn keyword_typo_error(&self, tok: &Token<'s>) -> Option<ParseError> {
+        if tok.kind != TokenKind::Other {
+            return None;
+        }
+        let (got, suggestion) = title_keyword_typo(tok.line_text, self.dialect)?;
+        Some(ParseError::new(
+            tok.location,
+            format!("unknown keyword '{got}', did you mean '{suggestion}'?"),
+        ))
+    }
+}
+
+fn describe_token(tok: &Token<'_>) -> String {
+    match tok.kind {
+        TokenKind::StepLine => {
+            let keyword = tok.keyword.unwrap_or("").trim();
+            if tok.text.is_empty() {
+                format!("step '{keyword}'")
+            } else {
+                format!("step '{keyword} {}'", tok.text)
+            }
+        }
+        TokenKind::FeatureLine
+        | TokenKind::RuleLine
+        | TokenKind::BackgroundLine
+        | TokenKind::ScenarioLine
+        | TokenKind::ExamplesLine => {
+            let keyword = tok.keyword.unwrap_or(match tok.kind {
+                TokenKind::FeatureLine => "Feature",
+                TokenKind::RuleLine => "Rule",
+                TokenKind::BackgroundLine => "Background",
+                TokenKind::ScenarioLine => "Scenario",
+                TokenKind::ExamplesLine => "Examples",
+                _ => unreachable!(),
+            });
+            if tok.text.is_empty() {
+                format!("'{keyword}'")
+            } else {
+                format!("'{keyword}: {}'", tok.text)
+            }
+        }
+        TokenKind::Other => {
+            if tok.line_text.len() > 60 {
+                format!("line '{}…'", &tok.line_text[..57])
+            } else {
+                format!("line '{}'", tok.line_text)
+            }
+        }
+        TokenKind::TagLine => format!("tag line '{}'", tok.line_text),
+        TokenKind::TableRow => "table row".to_owned(),
+        TokenKind::DocStringSeparator => "docstring separator".to_owned(),
+        TokenKind::Comment => format!("comment '{}'", tok.line_text),
+        TokenKind::Empty => "empty line".to_owned(),
+        TokenKind::Language => format!("language header '{}'", tok.text),
+        TokenKind::Eof => "end of file".to_owned(),
+    }
+}
+
+/// Detect a title-like line (`Something: …`) whose label is a near miss for a dialect keyword.
+fn title_keyword_typo(line: &str, dialect: &Dialect) -> Option<(String, &'static str)> {
+    let line = line.trim();
+    let (raw_keyword, _) = line.split_once(':')?;
+    let got = raw_keyword.trim();
+    if got.is_empty() {
+        return None;
+    }
+    if !got
+        .chars()
+        .all(|c| c.is_alphabetic() || c == ' ' || c == '-')
+    {
+        return None;
+    }
+
+    let mut best: Option<(&'static str, usize)> = None;
+    for kw in dialect.title_keywords() {
+        let distance = levenshtein(got, kw);
+        if distance == 0 {
+            continue;
+        }
+        let max = keyword_typo_max_distance(kw);
+        if distance <= max && best.map(|(_, best_d)| distance < best_d).unwrap_or(true) {
+            best = Some((kw, distance));
+        }
+    }
+    best.map(|(kw, _)| (got.to_owned(), kw))
+}
+
+fn keyword_typo_max_distance(keyword: &str) -> usize {
+    // Allow one edit for short keywords, two for longer ones like "Scenario Outline".
+    if keyword.len() <= 5 { 1 } else { 2 }
+}
+
+fn levenshtein(a: &str, b: &str) -> usize {
+    let a: Vec<char> = a.chars().collect();
+    let b: Vec<char> = b.chars().collect();
+    let mut prev: Vec<usize> = (0..=b.len()).collect();
+    let mut curr = vec![0; b.len() + 1];
+    for (i, ca) in a.iter().enumerate() {
+        curr[0] = i + 1;
+        for (j, cb) in b.iter().enumerate() {
+            let cost = usize::from(ca != cb);
+            curr[j + 1] = (prev[j + 1] + 1).min(curr[j] + 1).min(prev[j] + cost);
+        }
+        std::mem::swap(&mut prev, &mut curr);
+    }
+    prev[b.len()]
 }
 
 fn offset_of<'s>(source: &'s str, slice: &'s str) -> Option<usize> {
@@ -790,5 +908,55 @@ Feature: X
 ";
         let doc = parse(src).unwrap();
         assert!(doc.comments.iter().any(|c| c.text.contains("top comment")));
+    }
+
+    #[test]
+    fn suggests_correction_for_misspelled_scenario_keyword() {
+        let src = "\
+Feature: Cash
+  Rule: Limit
+
+    Scenarioo: Successful withdrawal
+      Given a step
+";
+        let err = parse(src).unwrap_err();
+        assert_eq!(err.location.line, 4);
+        assert!(
+            err.message.contains("unknown keyword 'Scenarioo'")
+                && err.message.contains("did you mean 'Scenario'?"),
+            "{}",
+            err.message
+        );
+    }
+
+    #[test]
+    fn describes_unexpected_trailing_step() {
+        let src = "\
+Feature: X
+  Given a dangling step
+";
+        let err = parse(src).unwrap_err();
+        assert!(
+            err.message.contains("expected end of file")
+                && err.message.contains("step 'Given a dangling step'"),
+            "{}",
+            err.message
+        );
+    }
+
+    #[test]
+    fn allows_description_lines_with_colons() {
+        let src = "\
+Feature: X
+  Note: this is fine
+  Cost: 5 dollars
+
+  Scenario: Y
+    Given z
+";
+        let doc = parse(src).unwrap();
+        let feature = doc.feature.unwrap();
+        assert!(feature.description.contains("Note: this is fine"));
+        assert!(feature.description.contains("Cost: 5 dollars"));
     }
 }
