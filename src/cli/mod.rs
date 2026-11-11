@@ -31,9 +31,7 @@ use std::path::PathBuf;
 use clap::{Args, Command, FromArgMatches};
 
 use crate::features::Features;
-#[cfg(feature = "json")]
-use crate::listener::Listener;
-use crate::listener::Printer;
+use crate::listener::{Listener, Printer};
 use crate::loader::LoadError;
 use crate::outcome::Outcome;
 use crate::suite::Suite;
@@ -223,13 +221,24 @@ impl Harness {
         #[cfg(not(feature = "colour"))]
         let printer = Printer::stdout();
 
+        let concurrent = self.concurrency > 1;
+
         #[cfg(feature = "json")]
         if self.json {
-            suite.with_reporter(printer.and(JsonReporter::stdout()));
+            let reporter = printer.and(JsonReporter::stdout());
+            if concurrent {
+                suite.with_reporter(reporter.normalized());
+            } else {
+                suite.with_reporter(reporter);
+            }
             return;
         }
 
-        suite.with_reporter(printer);
+        if concurrent {
+            suite.with_reporter(printer.normalized());
+        } else {
+            suite.with_reporter(printer);
+        }
     }
 }
 
@@ -687,6 +696,40 @@ Feature: Run
         let outcome = harness.run_sync(&mut suite).unwrap();
         assert!(outcome.is_ok(), "{outcome:?}");
         assert_eq!(outcome.passed, 1);
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn run_sync_concurrent_uses_normalized_reporter() {
+        let dir = std::env::temp_dir().join(format!("mizeria-cli-conc-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        let feature = write_feature(
+            &dir,
+            "parallel.feature",
+            "\
+Feature: Parallel
+  Scenario: a
+    Given a step
+  Scenario: b
+    Given a step
+  Scenario: c
+    Given a step
+",
+        );
+
+        let harness = Harness::builder()
+            .add_path(&feature)
+            .concurrency(3)
+            .parse_from(["demo"])
+            .unwrap();
+        assert!(harness.concurrency() > 1);
+
+        let mut suite = Suite::new(|| ());
+        suite.given("a step", || {});
+        let outcome = harness.run_sync(&mut suite).unwrap();
+        assert!(outcome.is_ok(), "{outcome:?}");
+        assert_eq!(outcome.passed, 3);
 
         let _ = fs::remove_dir_all(&dir);
     }
