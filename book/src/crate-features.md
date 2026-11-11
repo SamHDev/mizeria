@@ -16,21 +16,21 @@ Defaults (coloured printer + prelude + dialects + regex):
 
 ```toml
 [dependencies]
-mizeria = "0.1"
+mizeria = "0.4"
 ```
 
 Minimal English-only, no colour, no prelude, no regex:
 
 ```toml
 [dependencies]
-mizeria = { version = "0.1", default-features = false }
+mizeria = { version = "0.4", default-features = false }
 ```
 
 JSON reporting:
 
 ```toml
 [dependencies]
-mizeria = { version = "0.1", features = ["json"] }
+mizeria = { version = "0.4", features = ["json"] }
 ```
 
 The `withdrawing_cash` and `cukes` examples require `prelude` and `regex`:

@@ -5,7 +5,7 @@ prelude):
 
 ```toml
 [dependencies]
-mizeria = "0.1"
+mizeria = "0.4"
 ```
 
 Create a world, point at a features directory, register steps, bind a printer, and run:
