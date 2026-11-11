@@ -31,3 +31,6 @@ jobs:
 
       - name: Example
         run: cargo run --example withdrawing_cash --features prelude
+
+      - name: Orders app component tests
+        run: cargo test -p orders-app

@@ -22,8 +22,9 @@ Built-in extractors:
 | Entity getters (`Get`, `GetOrDefault`, `NamedMut`, …) | Entity bag (+ key capture) — [Entities](entities.md) |
 
 > **Registration note:** suite `given` / `when` / `then` require owned (`'static`)
-> extractors today. Prefer `String` / `Param<T>` / `CtxMut` at registration time.
-> Borrowed extractors are supported via the lower-level `call` helper for advanced use.
+> extractors. Prefer `String` / `Param<T>` / `CtxMut` / `DataTable` / `DocString`
+> at registration time. Borrowed extractors such as `Param<&str>` are supported via
+> the lower-level `call` helper for advanced use.
 
 ## Capture parameters
 
@@ -47,6 +48,44 @@ impl FromStr for Currency {
 
 fn step(Param(Currency(amount)): Param<Currency>) { /* … */ }
 ```
+
+### Composite params — `params!`
+
+One capture per field, as a named (or tuple) struct:
+
+```rust,ignore
+params! {
+    struct Transfer {
+        from: String,
+        amount: u32,
+    }
+}
+
+suite.when(re(r"(\w+) sends (\d+)"), |t: Transfer| {
+    assert!(t.amount > 0);
+});
+```
+
+Field types must implement `FromCapture` (the same cell/capture parse trait used by tables).
+
+### String enums — `variants!`
+
+Map unit variants to exact literals; the type extracts like `u32` (no `Param<>` needed):
+
+```rust,ignore
+variants! {
+    enum Status = {
+        Open = "open",
+        Closed = "closed",
+    }
+}
+
+suite.then(re(r"status is (\w+)"), |status: Status| {
+    assert_eq!(status, Status::Open);
+});
+```
+
+Unknown strings fail with `ParamRejection::Parse` listing the allowed literals.
 
 ## World access
 
@@ -82,15 +121,33 @@ suite.when("I submit the payload", |DocString(body): DocString| {
     assert!(body.contains("ok"));
 });
 
-suite.when("I import rows", |table: DataTable| {
-    for row in table.rows::<(&str, u32)>() {
-        let (name, qty) = row.expect("row");
-        // …
+suite.when("I import rows", |table: DataTable| -> Result<(), StepError> {
+    // Headered table: field names become expected headers (case-insensitive).
+    for row in rows!(for (name: &str, qty: u32) in &table)? {
+        let row = row?;
+        assert!(row.qty > 0);
+        let _ = row.name;
     }
+    Ok(())
 });
 ```
 
-`DataTable::rows` uses `FromRow` (tuples of `FromCapture` types) and checks arity.
+`DocString` and `DataTable` clone into owned values on extraction, so they are
+`'static` and work with `Suite` registration.
+
+For tables **with** a header row, prefer `rows!` or `DataTable::records`:
+
+```rust,ignore
+for row in table.records::<(String, u32)>(&["sku", "quantity"])? {
+    let (sku, qty) = row?;
+}
+```
+
+`records` checks the header case-insensitively, then yields body rows parsed with
+`FromRow` (tuples of `FromCapture` types). Header mismatches fail eagerly;
+cell parse failures are `Err` items (`TableRejection`).
+
+`DataTable::rows` still iterates every row as data when there is no header.
 
 ## Handler return values
 

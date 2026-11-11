@@ -6,9 +6,12 @@
 mod argument;
 mod ctx;
 mod param;
+mod params_macro;
 mod row;
+mod rows_macro;
+mod variants_macro;
 
-pub use argument::{DataTable, DocString};
+pub use argument::{DataTable, DocString, Records};
 pub use ctx::{Ctx, CtxMut, CtxRef};
 pub use param::{FromCapture, Param, parse_from_str};
 pub use row::FromRow;

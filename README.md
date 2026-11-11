@@ -44,6 +44,7 @@ let _ = suite.run_blocking(&features);
 - **API docs:** [docs.rs/mizeria](https://docs.rs/mizeria)
 - **Crates.io:** [crates.io/crates/mizeria](https://crates.io/crates/mizeria)
 - **Example:** `cargo run --example withdrawing_cash`
+- **Orders app (HTTP component tests):** `cargo test -p orders-app` — [walkthrough](book/src/walkthrough-orders-app.md)
 
 Local book preview: `mdbook serve book`
 

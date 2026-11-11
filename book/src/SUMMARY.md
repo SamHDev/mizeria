@@ -18,3 +18,4 @@
 - [Gherkin support](gherkin.md)
 - [Crate features](crate-features.md)
 - [Walkthrough: withdrawing cash](walkthrough-withdrawing-cash.md)
+- [Walkthrough: orders app](walkthrough-orders-app.md)

@@ -102,7 +102,7 @@ the function returns (and after the `NamedMut` lease drops).
 fn withdrawal_successful(w: GetRef<Withdrawal>) -> Result<(), StepError> {
     match *w {
         Withdrawal::Successful => Ok(()),
-        Withdrawal::Declined => Err(StepError::new("expected successful withdrawal")),
+        Withdrawal::Declined => fail!("expected successful withdrawal"),
     }
 }
 ```

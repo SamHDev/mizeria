@@ -79,7 +79,10 @@ async fn record(response: reqwest::Response) -> Result<HttpResult, StepError> {
         .json::<Value>()
         .await
         .map_err(|err| error!("response json: {err}"))?;
-    let response = Put::new(HttpResponse { status, body: body.clone() });
+    let response = Put::new(HttpResponse {
+        status,
+        body: body.clone(),
+    });
     Ok(match body.get("id").and_then(Value::as_u64) {
         Some(id) => HttpResult::Created(response, Put::new(OrderId(id))),
         None => HttpResult::Ok { response },
@@ -181,10 +184,7 @@ async fn cancel_created_order(
 
 fn assert_status(expected: u16, response: GetRef<HttpResponse>) -> Result<(), StepError> {
     if response.status != expected {
-        fail!(
-            "expected status {expected}, got {}",
-            response.status
-        );
+        fail!("expected status {expected}, got {}", response.status);
     }
     Ok(())
 }

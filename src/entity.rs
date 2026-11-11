@@ -927,6 +927,58 @@ mod tests {
         assert_eq!(bag.get_cloned::<u32, String>(&"x".into()).unwrap(), 3);
     }
 
+    crate::effects! {
+        struct PairPut {
+            a: Put<u32>,
+            b: Put<String>,
+        }
+
+        struct TuplePut(Put<u8>, Put<u16>);
+
+        enum EitherPut {
+            Named { value: Put<i32> },
+            Tuple(Put<i64>),
+        }
+    }
+
+    #[test]
+    fn effects_macro_struct_applies_all() {
+        let mut bag = EntityBag::new();
+        let outcome = PairPut {
+            a: Put::new(1u32),
+            b: Put::new("hi".to_owned()),
+        }
+        .into_step_result(&mut bag);
+        assert!(matches!(outcome, StepOutcome::Ok));
+        assert_eq!(bag.get_cloned::<u32, ()>(&()).unwrap(), 1);
+        assert_eq!(bag.get_cloned::<String, ()>(&()).unwrap(), "hi");
+    }
+
+    #[test]
+    fn effects_macro_tuple_struct_applies_all() {
+        let mut bag = EntityBag::new();
+        let outcome = TuplePut(Put::new(9u8), Put::new(10u16)).into_step_result(&mut bag);
+        assert!(matches!(outcome, StepOutcome::Ok));
+        assert_eq!(bag.get_cloned::<u8, ()>(&()).unwrap(), 9);
+        assert_eq!(bag.get_cloned::<u16, ()>(&()).unwrap(), 10);
+    }
+
+    #[test]
+    fn effects_macro_enum_variants() {
+        let mut bag = EntityBag::new();
+        let outcome = EitherPut::Named {
+            value: Put::new(42i32),
+        }
+        .into_step_result(&mut bag);
+        assert!(matches!(outcome, StepOutcome::Ok));
+        assert_eq!(bag.get_cloned::<i32, ()>(&()).unwrap(), 42);
+
+        let mut bag = EntityBag::new();
+        let outcome = EitherPut::Tuple(Put::new(7i64)).into_step_result(&mut bag);
+        assert!(matches!(outcome, StepOutcome::Ok));
+        assert_eq!(bag.get_cloned::<i64, ()>(&()).unwrap(), 7);
+    }
+
     #[test]
     fn get_replace_keeps_key() {
         let got = Get::named("alice".to_owned(), 1u32).replace(9);

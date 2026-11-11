@@ -123,7 +123,7 @@ async fn result_param_absorbs_parse_errors() {
 
 #[tokio::test]
 async fn docstring_take_once() {
-    fn read_doc(doc: DocString<'_>) -> Result<(), StepError> {
+    fn read_doc(doc: DocString) -> Result<(), StepError> {
         assert_eq!(doc.0, "hello");
         Ok(())
     }
@@ -138,7 +138,7 @@ async fn docstring_take_once() {
     );
     assert!(matches!(call(read_doc, ctx).await, StepOutcome::Ok));
 
-    fn read_two(_a: DocString<'_>, _b: DocString<'_>) {}
+    fn read_two(_a: DocString, _b: DocString) {}
     let mut entities = EntityBag::new();
     let ctx = StepContext::new(
         world,
@@ -151,7 +151,7 @@ async fn docstring_take_once() {
 
 #[tokio::test]
 async fn data_table_extractor() {
-    fn read_table(table: DataTable<'_>) {
+    fn read_table(table: DataTable) {
         assert_eq!(table.len(), 2);
         assert_eq!(table.0[0], ["a", "b"]);
     }
@@ -254,7 +254,7 @@ async fn custom_from_str_via_param() {
 async fn data_table_typed_rows() {
     use crate::response::RowRejection;
 
-    fn ingest(table: DataTable<'_>) -> Result<(), StepError> {
+    fn ingest(table: DataTable) -> Result<(), StepError> {
         let rows: Result<Vec<_>, _> = table.rows::<(&str, u32, String)>().collect();
         let rows = rows?;
         assert_eq!(rows.len(), 2);
@@ -279,7 +279,7 @@ async fn data_table_typed_rows() {
     assert!(matches!(call(ingest, ctx).await, StepOutcome::Ok));
 
     let bad_rows = vec![vec!["only".to_owned()]];
-    let table = DataTable(bad_rows.as_slice());
+    let table = DataTable(bad_rows);
     let err = table.rows::<(&str, u32)>().next().unwrap().unwrap_err();
     assert!(matches!(
         err,
@@ -290,7 +290,208 @@ async fn data_table_typed_rows() {
     ));
 
     let bad_parse_rows = vec![vec!["alice".to_owned(), "nope".to_owned()]];
-    let table = DataTable(bad_parse_rows.as_slice());
+    let table = DataTable(bad_parse_rows);
     let err = table.rows::<(&str, u32)>().next().unwrap().unwrap_err();
     assert!(matches!(err, RowRejection::Cell { column: 1, .. }));
+}
+
+#[tokio::test]
+async fn data_table_records() {
+    use crate::response::{RowRejection, TableRejection};
+
+    let table = DataTable(vec![
+        vec!["SKU".to_owned(), "Quantity".to_owned()],
+        vec!["widget".to_owned(), "2".to_owned()],
+        vec!["gizmo".to_owned(), "1".to_owned()],
+    ]);
+
+    let rows: Vec<_> = table
+        .records::<(String, u32)>(&["sku", "quantity"])
+        .expect("records")
+        .collect::<Result<_, _>>()
+        .expect("body");
+    assert_eq!(
+        rows,
+        vec![("widget".to_owned(), 2), ("gizmo".to_owned(), 1),]
+    );
+
+    let empty_body = DataTable(vec![vec!["sku".to_owned(), "quantity".to_owned()]]);
+    assert_eq!(
+        empty_body
+            .records::<(String, u32)>(&["sku", "quantity"])
+            .unwrap()
+            .len(),
+        0
+    );
+
+    let empty = DataTable(vec![]);
+    assert!(matches!(
+        empty.records::<(String, u32)>(&["sku", "quantity"]),
+        Err(TableRejection::Empty)
+    ));
+
+    let bad_header = DataTable(vec![
+        vec!["name".to_owned(), "qty".to_owned()],
+        vec!["widget".to_owned(), "1".to_owned()],
+    ]);
+    assert!(matches!(
+        bad_header.records::<(String, u32)>(&["sku", "quantity"]),
+        Err(TableRejection::Header { .. })
+    ));
+
+    let bad_cell = DataTable(vec![
+        vec!["sku".to_owned(), "quantity".to_owned()],
+        vec!["widget".to_owned(), "nope".to_owned()],
+    ]);
+    let err = bad_cell
+        .records::<(String, u32)>(&["sku", "quantity"])
+        .expect("header")
+        .next()
+        .unwrap()
+        .unwrap_err();
+    assert!(matches!(
+        err,
+        TableRejection::Row {
+            index: 1,
+            source: RowRejection::Cell { column: 1, .. }
+        }
+    ));
+}
+
+#[test]
+fn rows_macro_named_fields() {
+    let table = DataTable(vec![
+        vec!["sku".to_owned(), "quantity".to_owned()],
+        vec!["widget".to_owned(), "2".to_owned()],
+        vec!["gizmo".to_owned(), "1".to_owned()],
+    ]);
+
+    let rows: Vec<_> = crate::rows!(for (sku: &str, quantity: u32) in &table)
+        .expect("rows")
+        .collect::<Result<_, _>>()
+        .expect("body");
+    assert_eq!(rows.len(), 2);
+    assert_eq!(rows[0].sku, "widget");
+    assert_eq!(rows[0].quantity, 2);
+    assert_eq!(rows[1].sku, "gizmo");
+    assert_eq!(rows[1].quantity, 1);
+}
+
+crate::params! {
+    struct Transfer {
+        from: String,
+        amount: u32,
+    }
+}
+
+crate::params! {
+    struct Pair(String, u32);
+}
+
+#[tokio::test]
+async fn params_macro_named_struct() {
+    fn send(t: Transfer) {
+        assert_eq!(t.from, "alice");
+        assert_eq!(t.amount, 5);
+    }
+
+    let world = Locked::new(World::default());
+    let mut entities = EntityBag::new();
+    let captures = ["alice", "5"];
+    let ctx = StepContext::new(world, &mut entities, SliceCaptures::new(&captures), None);
+    assert!(matches!(call(send, ctx).await, StepOutcome::Ok));
+}
+
+#[tokio::test]
+async fn params_macro_tuple_struct() {
+    fn send(Pair(from, amount): Pair) {
+        assert_eq!(from, "bob");
+        assert_eq!(amount, 3);
+    }
+
+    let world = Locked::new(World::default());
+    let mut entities = EntityBag::new();
+    let captures = ["bob", "3"];
+    let ctx = StepContext::new(world, &mut entities, SliceCaptures::new(&captures), None);
+    assert!(matches!(call(send, ctx).await, StepOutcome::Ok));
+}
+
+#[tokio::test]
+async fn params_macro_missing_capture() {
+    fn send(_: Transfer) {}
+
+    let world = Locked::new(World::default());
+    let mut entities = EntityBag::new();
+    let captures = ["alice"];
+    let ctx = StepContext::new(world, &mut entities, SliceCaptures::new(&captures), None);
+    assert!(matches!(call(send, ctx).await, StepOutcome::Failed(_)));
+}
+
+crate::variants! {
+    enum Status = {
+        Open = "open",
+        Closed = "closed",
+    }
+}
+
+#[tokio::test]
+async fn variants_macro_extracts() {
+    fn check(status: Status) {
+        assert_eq!(status, Status::Open);
+        assert_eq!(status.to_string(), "open");
+    }
+
+    let world = Locked::new(World::default());
+    let mut entities = EntityBag::new();
+    let captures = ["open"];
+    let ctx = StepContext::new(world, &mut entities, SliceCaptures::new(&captures), None);
+    assert!(matches!(call(check, ctx).await, StepOutcome::Ok));
+}
+
+#[tokio::test]
+async fn variants_macro_rejects_unknown() {
+    fn check(_: Status) {}
+
+    let world = Locked::new(World::default());
+    let mut entities = EntityBag::new();
+    let captures = ["pending"];
+    let ctx = StepContext::new(world, &mut entities, SliceCaptures::new(&captures), None);
+    let outcome = call(check, ctx).await;
+    match outcome {
+        StepOutcome::Failed(err) => {
+            assert!(err.message().contains("expected one of"));
+            assert!(err.message().contains("open"));
+        }
+        other => panic!("expected failure, got {other:?}"),
+    }
+}
+
+#[tokio::test]
+async fn fail_macro_returns_step_error() {
+    fn boom() -> Result<(), StepError> {
+        if true {
+            crate::fail!("boom {}", 1);
+        }
+        Ok(())
+    }
+
+    let world = Locked::new(World::default());
+    let mut entities = EntityBag::new();
+    let ctx = StepContext::new(world, &mut entities, EmptyCaptures, None);
+    match call(boom, ctx).await {
+        StepOutcome::Failed(err) => assert_eq!(err.message(), "boom 1"),
+        other => panic!("expected failure, got {other:?}"),
+    }
+}
+
+#[test]
+fn error_macro_literal_and_format() {
+    let lit = crate::error!("static");
+    assert_eq!(lit.message(), "static");
+    let fmt = crate::error!("n={}", 7);
+    assert_eq!(fmt.message(), "n=7");
+    let expected = 1u32;
+    let actual = 2u32;
+    let captured = crate::error!("expected {expected}, got {actual}");
+    assert_eq!(captured.message(), "expected 1, got 2");
 }

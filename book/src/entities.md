@@ -62,6 +62,28 @@ fn record_result(status: Withdrawal) -> Put<Withdrawal> {
 Tuples of effects apply left-to-right. `Result<Effect, StepError>` applies the effect
 only on `Ok`.
 
+### Composite effects — `effects!`
+
+For a named or sum-typed return instead of a raw tuple, declare a struct or enum whose
+fields are themselves effects:
+
+```rust,ignore
+effects! {
+    struct Created {
+        response: Put<HttpResponse>,
+        id: Put<OrderId>,
+    }
+
+    enum Outcome {
+        Ok { response: Put<HttpResponse> },
+        Created(Put<HttpResponse>, Put<OrderId>),
+    }
+}
+```
+
+`Effect::apply` runs nested effects left-to-right (or for the active enum variant).
+Payload types must implement `Effect` (`Put`, `Insert`, `Remove`, nested composites, …).
+
 ## World vs entities
 
 | Prefer a **world** when… | Prefer **entities** when… |
@@ -71,7 +93,9 @@ only on `Ok`.
 | You want simple `CtxMut` handlers | You want effect-returning handlers |
 
 You can use both in the same suite. The [withdrawing cash](walkthrough-withdrawing-cash.md)
-example uses a unit world (`|| ()`) and entities only.
+example uses a unit world (`|| ()`) and entities only. The
+[orders app](walkthrough-orders-app.md) keeps HTTP client/server state in the world and
+puts response facts in the entity bag.
 
 ## Custom keys
 

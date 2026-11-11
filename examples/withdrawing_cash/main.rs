@@ -54,14 +54,14 @@ fn try_withdraw(
 fn withdrawal_successful(w: GetRef<Withdrawal>) -> Result<(), StepError> {
     match *w {
         Withdrawal::Successful => Ok(()),
-        Withdrawal::Declined => Err(StepError::new("expected successful withdrawal")),
+        Withdrawal::Declined => fail!("expected successful withdrawal"),
     }
 }
 
 fn withdrawal_declined(w: GetRef<Withdrawal>) -> Result<(), StepError> {
     match *w {
         Withdrawal::Declined => Ok(()),
-        Withdrawal::Successful => Err(StepError::new("expected declined withdrawal")),
+        Withdrawal::Successful => fail!("expected declined withdrawal"),
     }
 }
 

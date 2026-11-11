@@ -1,12 +1,16 @@
 [package]
 name = "mizeria"
-version = "0.3.0"
+version = "0.4.0"
 edition = "2024"
 license = "MIT"
 repository = "https://github.com/samhdev/mizeria"
 homepage = "https://github.com/samhdev/mizeria"
 documentation = "https://docs.rs/mizeria"
 description = "Prototype cucumber-style BDD runner for Rust"
+
+[workspace]
+members = ["examples/orders-app"]
+resolver = "2"
 
 [features]
 default = ["dialects", "colour", "prelude", "regex"]

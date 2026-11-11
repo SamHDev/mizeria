@@ -239,3 +239,58 @@ impl From<RowRejection> for StepError {
         StepError::new(value.to_string())
     }
 }
+
+/// Failure to parse a data table with a header row ([`DataTable::records`](crate::extract::DataTable::records)).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TableRejection {
+    /// The table had no rows at all.
+    Empty,
+    /// The first row did not match the expected header labels.
+    Header {
+        /// Expected column names (as provided by the caller).
+        expected: Vec<String>,
+        /// Actual header cells from the table.
+        got: Vec<String>,
+    },
+    /// A body row failed to parse.
+    Row {
+        /// One-based index among data rows (header is not counted).
+        index: usize,
+        /// Underlying row parse failure.
+        source: RowRejection,
+    },
+}
+
+impl fmt::Display for TableRejection {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Empty => f.write_str("data table is empty"),
+            Self::Header { expected, got } => {
+                write!(
+                    f,
+                    "data table header mismatch: expected | {} |, got | {} |",
+                    expected.join(" | "),
+                    got.join(" | ")
+                )
+            }
+            Self::Row { index, source } => {
+                write!(f, "data table row {index}: {source}")
+            }
+        }
+    }
+}
+
+impl std::error::Error for TableRejection {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Row { source, .. } => Some(source),
+            Self::Empty | Self::Header { .. } => None,
+        }
+    }
+}
+
+impl From<TableRejection> for StepError {
+    fn from(value: TableRejection) -> Self {
+        StepError::new(value.to_string())
+    }
+}

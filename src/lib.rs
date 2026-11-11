@@ -56,3 +56,6 @@ pub mod response;
 pub mod statement;
 pub mod suite;
 pub mod tags;
+
+mod effects_macro;
+mod response_macros;

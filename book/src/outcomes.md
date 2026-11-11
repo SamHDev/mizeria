@@ -46,16 +46,25 @@ if !outcome.is_ok() {
 
 ## Step-level errors
 
-Inside a handler, fail with `StepError` (or `Err` that converts into one):
+Inside a handler, fail with `StepError` (or `Err` that converts into one). Prefer the helpers:
 
 ```rust,ignore
 fn must_succeed(w: GetRef<Withdrawal>) -> Result<(), StepError> {
     match *w {
         Withdrawal::Successful => Ok(()),
-        Withdrawal::Declined => Err(StepError::new("expected successful withdrawal")),
+        Withdrawal::Declined => fail!("expected successful withdrawal"),
     }
 }
+
+let err = error!("expected {expected}, got {actual}");
 ```
+
+| Macro | Expands to |
+|---|---|
+| `error!(…)` | `StepError::new(format!(…))` for format strings (implicit capture OK); or `StepError::new(expr)` |
+| `fail!(…)` | `return Err(error!(…))` |
+
+`error!` can clash with `tracing` / `log` under glob imports; use `mizeria::error!` when both are in scope.
 
 Extractor rejections (`ParamRejection`, `EntityRejection`, `ArgumentRejection`, …)
 convert into `StepError` automatically and fail the step before the body runs.
