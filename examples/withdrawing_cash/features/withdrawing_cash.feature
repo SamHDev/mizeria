@@ -2,7 +2,7 @@ Feature: Withdrawing cash
 
   Rule: Customers cannot withdraw more than their balance
 
-    Scenarioo: Successful withdrawal within balance
+    Scenario: Successful withdrawal within balance
       Given Alice has 234.56 in their account
       When Alice tries to withdraw 200.00
       Then the withdrawal is successful
