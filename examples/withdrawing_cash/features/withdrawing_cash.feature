@@ -9,5 +9,5 @@ Feature: Withdrawing cash
 
     Scenario: Declined withdrawal in excess of balance
       Given Hamza has 198.76 in their account
-      When Hamza tries to withdraw 200
+      When Hamza tries to withdraw 200.00
       Then the withdrawal is declined
