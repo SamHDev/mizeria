@@ -1,0 +1,21 @@
+[package]
+name = "orders-app"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[[bin]]
+name = "orders-app"
+path = "src/main.rs"
+
+[dependencies]
+axum = "0.8"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "sync"] }
+
+[dev-dependencies]
+mizeria = { path = "../..", features = ["prelude", "regex", "dialects"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+serde_json = "1"
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "sync"] }
