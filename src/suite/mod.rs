@@ -13,7 +13,7 @@ use crate::entity::EntityBag;
 use crate::extract::{StepArgument, StepContext};
 use crate::features::Features;
 use crate::handler::{Handler, HandlerMarker};
-use crate::listener::{Listener, StepEvent, StepResult};
+use crate::listener::{Listener, StepResult};
 use crate::lock::Locked;
 use crate::outcome::Outcome;
 use crate::response::StepOutcome;
@@ -427,11 +427,8 @@ impl<W> Suite<W> {
                 effective_keyword = Some(kw);
             }
 
-            let step_event = StepEvent {
-                keyword: step.keyword.as_ref(),
-                text: step.text.as_ref(),
-                location: step.location,
-            };
+            let step_event =
+                job.step_event(step.keyword.as_ref(), step.text.as_ref(), step.location);
             reporter.on_step_started(&step_event);
 
             let result = if skip_rest {
@@ -496,11 +493,8 @@ impl<W> Suite<W> {
                 effective_keyword = Some(kw);
             }
 
-            let step_event = StepEvent {
-                keyword: step.keyword.as_ref(),
-                text: step.text.as_ref(),
-                location: step.location,
-            };
+            let step_event =
+                job.step_event(step.keyword.as_ref(), step.text.as_ref(), step.location);
             reporter.on_step_started(&step_event);
 
             let result = if skip_rest {
@@ -622,7 +616,7 @@ pub(super) enum ScenarioStatus {
 mod tests {
     use super::*;
     use crate::extract::CtxMut;
-    use crate::listener::{Listener, Printer, ScenarioEvent, StepEvent};
+    use crate::listener::{FeatureEvent, Listener, Printer, ScenarioEvent, StepEvent};
     use crate::outcome::Outcome;
     #[cfg(feature = "regex")]
     use crate::statement::Regex;
@@ -1078,5 +1072,139 @@ Feature: Serial
         assert_eq!(blocking, threaded);
         assert_eq!(blocking.passed, 5);
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// Assert feature blocks are contiguous: once a feature starts, its scenarios
+    /// and finish arrive before another feature starts.
+    fn assert_features_contiguous(events: &[String]) {
+        let mut open: Option<String> = None;
+        for event in events {
+            if let Some(name) = event.strip_prefix("feature_started:") {
+                assert!(
+                    open.is_none(),
+                    "feature {name} started while {:?} still open; events={events:?}",
+                    open
+                );
+                open = Some(name.to_owned());
+            } else if let Some(name) = event.strip_prefix("feature_finished:") {
+                assert_eq!(
+                    open.as_deref(),
+                    Some(name),
+                    "feature_finished mismatch; events={events:?}"
+                );
+                open = None;
+            } else if let Some(rest) = event.strip_prefix("scenario_started:") {
+                let feature = rest.split(':').next().unwrap();
+                assert_eq!(
+                    open.as_deref(),
+                    Some(feature),
+                    "scenario outside open feature; events={events:?}"
+                );
+            } else if let Some(rest) = event.strip_prefix("scenario_finished:") {
+                let feature = rest.split(':').next().unwrap();
+                assert_eq!(
+                    open.as_deref(),
+                    Some(feature),
+                    "scenario outside open feature; events={events:?}"
+                );
+            } else if let Some(rest) = event.strip_prefix("step:") {
+                let feature = rest.split(':').next().unwrap();
+                assert_eq!(
+                    open.as_deref(),
+                    Some(feature),
+                    "step outside open feature; events={events:?}"
+                );
+            }
+        }
+        assert!(
+            open.is_none(),
+            "unclosed feature {open:?}; events={events:?}"
+        );
+    }
+
+    #[test]
+    fn normalized_keeps_concurrent_features_contiguous() {
+        let dir = std::env::temp_dir().join(format!("mizeria-norm-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+
+        let a = write_feature(
+            &dir,
+            "a.feature",
+            "\
+Feature: Alpha
+  Scenario: a1
+    Given a step
+  Scenario: a2
+    Given a step
+",
+        );
+        let b = write_feature(
+            &dir,
+            "b.feature",
+            "\
+Feature: Beta
+  Scenario: b1
+    Given a step
+  Scenario: b2
+    Given a step
+",
+        );
+        let features = Features::builder()
+            .add_path(&a)
+            .add_path(&b)
+            .build()
+            .unwrap();
+
+        let mut suite = Suite::new(|| ());
+        suite.given("a step", || {
+            thread::sleep(Duration::from_millis(5));
+        });
+
+        // Capture events via a channel-backed listener behind Normalized.
+        let events = Arc::new(Mutex::new(Vec::<String>::new()));
+        {
+            struct Capture(Arc<Mutex<Vec<String>>>);
+            impl Listener for Capture {
+                fn on_feature_started(&mut self, event: &FeatureEvent<'_>) {
+                    self.0
+                        .lock()
+                        .unwrap()
+                        .push(format!("feature_started:{}", event.name));
+                }
+                fn on_feature_finished(&mut self, event: &FeatureEvent<'_>) {
+                    self.0
+                        .lock()
+                        .unwrap()
+                        .push(format!("feature_finished:{}", event.name));
+                }
+                fn on_scenario_started(&mut self, event: &ScenarioEvent<'_>) {
+                    self.0.lock().unwrap().push(format!(
+                        "scenario_started:{}:{}",
+                        event.feature.name, event.name
+                    ));
+                }
+                fn on_scenario_finished(&mut self, event: &ScenarioEvent<'_>) {
+                    self.0.lock().unwrap().push(format!(
+                        "scenario_finished:{}:{}",
+                        event.feature.name, event.name
+                    ));
+                }
+                fn on_step_finished(&mut self, event: &StepEvent<'_>, _result: &StepResult) {
+                    self.0.lock().unwrap().push(format!(
+                        "step:{}:{}",
+                        event.feature.name, event.scenario_name
+                    ));
+                }
+            }
+            suite.with_reporter(Capture(Arc::clone(&events)).normalized());
+        }
+
+        let outcome = suite.run_threaded(4, &features);
+        let _ = fs::remove_dir_all(&dir);
+
+        assert!(outcome.is_ok(), "{outcome:?}");
+        assert_eq!(outcome.passed, 4);
+        let recorded = events.lock().unwrap().clone();
+        assert_features_contiguous(&recorded);
     }
 }

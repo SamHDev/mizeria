@@ -9,6 +9,7 @@ Mizeria’s Cargo features (from `Cargo.toml`):
 | `prelude` | yes | `mizeria::prelude` re-exports |
 | `regex` | yes | `Regex` / `re` step matchers (`regex` crate); without it, exact-string only |
 | `json` | no | Legacy Cucumber JSON `JsonReporter` (`serde` / `serde_json`) |
+| `cli` | no | Clap-backed `cli::Harness` for running a suite from argv (`clap`) |
 
 ## Typical dependency lines
 
@@ -33,6 +34,20 @@ JSON reporting:
 mizeria = { version = "0.4", features = ["json"] }
 ```
 
+CLI harness (see [CLI harness](cli.md)):
+
+```toml
+[dependencies]
+mizeria = { version = "0.4", features = ["cli"] }
+```
+
+JSON flag on the CLI (`--json`) needs both:
+
+```toml
+[dependencies]
+mizeria = { version = "0.4", features = ["cli", "json"] }
+```
+
 The `withdrawing_cash` and `cukes` examples require `prelude` and `regex`:
 
 ```toml
@@ -51,3 +66,5 @@ required-features = ["prelude", "regex"]
 - `json` is additive; bind `JsonReporter` alone, or compose with a printer via
   `Printer::stdout().and(JsonReporter::stdout())` — a suite still holds a single
   listener slot via `bind`.
+- `cli` is additive; without it, `mizeria::cli` is unavailable. `--no-colour`
+  requires the `colour` feature; `--json` requires the `json` feature.

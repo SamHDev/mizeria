@@ -291,59 +291,55 @@ mod tests {
     use crate::listener::{FeatureEvent, ScenarioEvent, StepEvent};
     use crate::outcome::Outcome;
 
+    fn feature() -> FeatureEvent<'static> {
+        FeatureEvent {
+            uri: "features/cukes.feature",
+            name: "Cukes",
+            keyword: "Feature",
+            location: Location::new(1, 1),
+        }
+    }
+
+    fn scenario() -> ScenarioEvent<'static> {
+        ScenarioEvent {
+            feature: feature(),
+            rule: None,
+            name: "eat",
+            keyword: "Scenario",
+            location: Location::new(3, 3),
+        }
+    }
+
+    fn step(keyword: &'static str, text: &'static str, line: u32) -> StepEvent<'static> {
+        StepEvent {
+            feature: feature(),
+            rule: None,
+            scenario_name: "eat",
+            scenario_keyword: "Scenario",
+            scenario_location: Location::new(3, 3),
+            keyword,
+            text,
+            location: Location::new(line, 5),
+        }
+    }
+
     #[test]
     fn prints_ascii_report_on_completion() {
         let mut printer = ASCIISyncPrinter::new(Vec::<u8>::new());
 
         printer.on_run_started();
-        printer.on_feature_started(&FeatureEvent {
-            uri: "features/cukes.feature",
-            name: "Cukes",
-            keyword: "Feature",
-            location: Location::new(1, 1),
-        });
-        printer.on_scenario_started(&ScenarioEvent {
-            name: "eat",
-            keyword: "Scenario",
-            location: Location::new(3, 3),
-        });
+        printer.on_feature_started(&feature());
+        printer.on_scenario_started(&scenario());
+        printer.on_step_finished(&step("Given ", "I have 2 cukes", 4), &StepResult::Passed);
+        printer.on_step_finished(&step("When ", "I eat 1 cuke", 5), &StepResult::Passed);
         printer.on_step_finished(
-            &StepEvent {
-                keyword: "Given ",
-                text: "I have 2 cukes",
-                location: Location::new(4, 5),
-            },
-            &StepResult::Passed,
-        );
-        printer.on_step_finished(
-            &StepEvent {
-                keyword: "When ",
-                text: "I eat 1 cuke",
-                location: Location::new(5, 5),
-            },
-            &StepResult::Passed,
-        );
-        printer.on_step_finished(
-            &StepEvent {
-                keyword: "Then ",
-                text: "I have 1 cuke left",
-                location: Location::new(6, 5),
-            },
+            &step("Then ", "I have 1 cuke left", 6),
             &StepResult::Failed {
                 message: "expected 1, got 0".into(),
             },
         );
-        printer.on_scenario_finished(&ScenarioEvent {
-            name: "eat",
-            keyword: "Scenario",
-            location: Location::new(3, 3),
-        });
-        printer.on_feature_finished(&FeatureEvent {
-            uri: "features/cukes.feature",
-            name: "Cukes",
-            keyword: "Feature",
-            location: Location::new(1, 1),
-        });
+        printer.on_scenario_finished(&scenario());
+        printer.on_feature_finished(&feature());
 
         let outcome = Outcome {
             passed: 0,

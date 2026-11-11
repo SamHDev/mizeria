@@ -14,6 +14,26 @@ suite.with_reporter(Printer::stdout().and(JsonReporter::stdout()));
 `a.and(b).and(c)` nests left-associatively as `Joined(Joined(a, b), c)`. Hooks run
 left-to-right.
 
+## Concurrent normalization
+
+Concurrent runs (`run_concurrent` / `run_threaded`) may interleave scenario and step
+hooks from different features. Wrap a listener with `Listener::normalized` (returns
+`Normalized`) so the inner listener sees contiguous feature → rule → scenario → step
+blocks, as if the run were sequential:
+
+```rust,ignore
+suite.with_reporter(Printer::stdout().normalized());
+suite.with_reporter(Printer::stdout().and(JsonReporter::stdout()).normalized());
+```
+
+Once a feature has started emitting, it finishes before the next feature starts.
+Completion printers already buffer until the run ends; prefer `.normalized()` when
+the inner listener prints or reacts live, or when you need correct nesting under
+concurrency.
+
+`ScenarioEvent`, `RuleEvent`, and `StepEvent` carry parent feature (and rule)
+identity so normalization can attribute interleaved hooks.
+
 ## Built-in printers
 
 With default features (`colour` enabled), `Printer` is an alias for

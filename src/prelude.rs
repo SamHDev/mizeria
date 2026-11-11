@@ -20,8 +20,8 @@ pub use crate::handler::{Call, Handler, HandlerMarker, IntoStepFuture, call};
 #[cfg(feature = "json")]
 pub use crate::listener::JsonReporter;
 pub use crate::listener::{
-    ASCIISyncPrinter, FeatureEvent, Joined, Listener, Printer, RuleEvent, ScenarioEvent, StepEvent,
-    StepResult,
+    ASCIISyncPrinter, FeatureEvent, Joined, Listener, Normalized, Printer, RuleEvent,
+    ScenarioEvent, StepEvent, StepResult,
 };
 #[cfg(feature = "colour")]
 pub use crate::listener::{Colour, ColourSyncPrinter};

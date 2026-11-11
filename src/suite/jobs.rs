@@ -5,7 +5,7 @@ use std::collections::HashSet;
 
 use crate::ast::{Background, FeatureChild, KeywordType, Location, RuleChild, Scenario, Step, Tag};
 use crate::features::Features;
-use crate::listener::{FeatureEvent, RuleEvent, ScenarioEvent};
+use crate::listener::{FeatureEvent, RuleEvent, ScenarioEvent, StepEvent};
 
 /// One runnable scenario (or outline example) with steps already expanded.
 pub(crate) struct ScenarioJob<'a> {
@@ -42,6 +42,7 @@ impl<'a> ScenarioJob<'a> {
 
     pub fn rule_event(&self) -> Option<RuleEvent<'a>> {
         self.rule.map(|r| RuleEvent {
+            feature: self.feature_event(),
             name: r.name,
             keyword: r.keyword,
             location: r.location,
@@ -50,9 +51,29 @@ impl<'a> ScenarioJob<'a> {
 
     pub fn scenario_event(&self) -> ScenarioEvent<'a> {
         ScenarioEvent {
+            feature: self.feature_event(),
+            rule: self.rule_event(),
             name: self.scenario_name,
             keyword: self.scenario_keyword,
             location: self.scenario_location,
+        }
+    }
+
+    pub fn step_event(
+        &'a self,
+        keyword: &'a str,
+        text: &'a str,
+        location: Location,
+    ) -> StepEvent<'a> {
+        StepEvent {
+            feature: self.feature_event(),
+            rule: self.rule_event(),
+            scenario_name: self.scenario_name,
+            scenario_keyword: self.scenario_keyword,
+            scenario_location: self.scenario_location,
+            keyword,
+            text,
+            location,
         }
     }
 }

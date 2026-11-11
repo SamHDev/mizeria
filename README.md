@@ -56,3 +56,4 @@ Local book preview: `mdbook serve book`
 | `colour` | yes | ANSI-coloured completion printer |
 | `prelude` | yes | `mizeria::prelude` re-exports |
 | `json` | no | Legacy Cucumber JSON reporter |
+| `cli` | no | Clap-backed `cli::Harness` for running a suite from argv |

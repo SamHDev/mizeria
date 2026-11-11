@@ -12,6 +12,7 @@
 - [Entities](entities.md)
 - [Listeners](listeners.md)
 - [Outcomes](outcomes.md)
+- [CLI harness](cli.md)
 
 # Reference
 

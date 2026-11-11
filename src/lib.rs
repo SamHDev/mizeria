@@ -40,8 +40,12 @@
 //! - **`prelude`** (default): [`prelude`] re-exports of commonly used items.
 //! - **`regex`** (default): [`Regex`](statement::Regex) / [`re`](statement::re) step matchers.
 //! - **`json`**: legacy Cucumber JSON `JsonReporter`.
+//! - **`cli`**: clap-backed [`cli::Harness`] for running a suite from argv.
 
 pub mod ast;
+#[cfg(feature = "cli")]
+#[cfg_attr(docsrs, doc(cfg(feature = "cli")))]
+pub mod cli;
 pub mod entity;
 pub mod extract;
 pub mod features;

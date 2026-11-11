@@ -1,6 +1,6 @@
 [package]
 name = "mizeria"
-version = "0.4.0"
+version = "0.4.1"
 edition = "2024"
 license = "MIT"
 repository = "https://github.com/samhdev/mizeria"
@@ -24,12 +24,22 @@ prelude = []
 regex = ["dep:regex"]
 # Legacy Cucumber JSON listener (`listener::JsonReporter`).
 json = ["dep:serde", "dep:serde_json"]
+# Clap-backed CLI harness (`cli::Harness`) for running a suite from argv.
+cli = ["dep:clap"]
 
 [package.metadata.docs.rs]
 all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
 
 [dependencies]
+clap = { version = "4", optional = true, default-features = false, features = [
+    "std",
+    "derive",
+    "help",
+    "usage",
+    "error-context",
+    "string",
+] }
 console = { version = "0.16", optional = true }
 futures-util = { version = "0.3", default-features = false, features = ["std"] }
 pollster = "0.4"
@@ -47,7 +57,7 @@ required-features = ["prelude", "regex", "dialects"]
 
 [[example]]
 name = "cukes"
-required-features = ["prelude", "regex"]
+required-features = ["prelude", "regex", "cli"]
 
 [[bench]]
 name = "hot_path"

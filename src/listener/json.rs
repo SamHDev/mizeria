@@ -267,61 +267,59 @@ mod tests {
     use crate::ast::Location;
     use crate::outcome::Outcome;
 
+    fn cukes_feature() -> FeatureEvent<'static> {
+        FeatureEvent {
+            uri: "features/cukes.feature",
+            name: "Cukes",
+            keyword: "Feature",
+            location: Location::new(1, 1),
+        }
+    }
+
+    fn cukes_scenario() -> ScenarioEvent<'static> {
+        ScenarioEvent {
+            feature: cukes_feature(),
+            rule: None,
+            name: "eat cukes",
+            keyword: "Scenario",
+            location: Location::new(3, 3),
+        }
+    }
+
+    fn cukes_step(keyword: &'static str, text: &'static str, line: u32) -> StepEvent<'static> {
+        StepEvent {
+            feature: cukes_feature(),
+            rule: None,
+            scenario_name: "eat cukes",
+            scenario_keyword: "Scenario",
+            scenario_location: Location::new(3, 3),
+            keyword,
+            text,
+            location: Location::new(line, 5),
+        }
+    }
+
     #[test]
     fn writes_cucumber_json_on_completion() {
         let mut reporter = JsonReporter::new(Vec::<u8>::new());
 
         reporter.on_run_started();
-        reporter.on_feature_started(&FeatureEvent {
-            uri: "features/cukes.feature",
-            name: "Cukes",
-            keyword: "Feature",
-            location: Location::new(1, 1),
-        });
-        reporter.on_scenario_started(&ScenarioEvent {
-            name: "eat cukes",
-            keyword: "Scenario",
-            location: Location::new(3, 3),
-        });
-        reporter.on_step_started(&StepEvent {
-            keyword: "Given ",
-            text: "I have 2 cukes",
-            location: Location::new(4, 5),
-        });
+        reporter.on_feature_started(&cukes_feature());
+        reporter.on_scenario_started(&cukes_scenario());
+        reporter.on_step_started(&cukes_step("Given ", "I have 2 cukes", 4));
         reporter.on_step_finished(
-            &StepEvent {
-                keyword: "Given ",
-                text: "I have 2 cukes",
-                location: Location::new(4, 5),
-            },
+            &cukes_step("Given ", "I have 2 cukes", 4),
             &StepResult::Passed,
         );
-        reporter.on_step_started(&StepEvent {
-            keyword: "Then ",
-            text: "I have 1 cuke left",
-            location: Location::new(5, 5),
-        });
+        reporter.on_step_started(&cukes_step("Then ", "I have 1 cuke left", 5));
         reporter.on_step_finished(
-            &StepEvent {
-                keyword: "Then ",
-                text: "I have 1 cuke left",
-                location: Location::new(5, 5),
-            },
+            &cukes_step("Then ", "I have 1 cuke left", 5),
             &StepResult::Failed {
                 message: "expected 1, got 0".into(),
             },
         );
-        reporter.on_scenario_finished(&ScenarioEvent {
-            name: "eat cukes",
-            keyword: "Scenario",
-            location: Location::new(3, 3),
-        });
-        reporter.on_feature_finished(&FeatureEvent {
-            uri: "features/cukes.feature",
-            name: "Cukes",
-            keyword: "Feature",
-            location: Location::new(1, 1),
-        });
+        reporter.on_scenario_finished(&cukes_scenario());
+        reporter.on_feature_finished(&cukes_feature());
         reporter.on_run_finished(&Outcome::default());
 
         let value: serde_json::Value = serde_json::from_slice(&reporter.into_inner()).unwrap();
@@ -349,48 +347,44 @@ mod tests {
     #[test]
     fn prefixes_rule_scenario_names() {
         let mut reporter = JsonReporter::new(Vec::<u8>::new());
+        let feature = FeatureEvent {
+            uri: "features/billing.feature",
+            name: "Billing",
+            keyword: "Feature",
+            location: Location::new(1, 1),
+        };
+        let rule = RuleEvent {
+            feature,
+            name: "Refunds",
+            keyword: "Rule",
+            location: Location::new(3, 3),
+        };
+        let scenario = ScenarioEvent {
+            feature,
+            rule: Some(rule),
+            name: "full refund",
+            keyword: "Scenario",
+            location: Location::new(5, 5),
+        };
+        let step = StepEvent {
+            feature,
+            rule: Some(rule),
+            scenario_name: "full refund",
+            scenario_keyword: "Scenario",
+            scenario_location: Location::new(5, 5),
+            keyword: "Given ",
+            text: "a purchase",
+            location: Location::new(6, 7),
+        };
 
         reporter.on_run_started();
-        reporter.on_feature_started(&FeatureEvent {
-            uri: "features/billing.feature",
-            name: "Billing",
-            keyword: "Feature",
-            location: Location::new(1, 1),
-        });
-        reporter.on_rule_started(&RuleEvent {
-            name: "Refunds",
-            keyword: "Rule",
-            location: Location::new(3, 3),
-        });
-        reporter.on_scenario_started(&ScenarioEvent {
-            name: "full refund",
-            keyword: "Scenario",
-            location: Location::new(5, 5),
-        });
-        reporter.on_step_finished(
-            &StepEvent {
-                keyword: "Given ",
-                text: "a purchase",
-                location: Location::new(6, 7),
-            },
-            &StepResult::Passed,
-        );
-        reporter.on_scenario_finished(&ScenarioEvent {
-            name: "full refund",
-            keyword: "Scenario",
-            location: Location::new(5, 5),
-        });
-        reporter.on_rule_finished(&RuleEvent {
-            name: "Refunds",
-            keyword: "Rule",
-            location: Location::new(3, 3),
-        });
-        reporter.on_feature_finished(&FeatureEvent {
-            uri: "features/billing.feature",
-            name: "Billing",
-            keyword: "Feature",
-            location: Location::new(1, 1),
-        });
+        reporter.on_feature_started(&feature);
+        reporter.on_rule_started(&rule);
+        reporter.on_scenario_started(&scenario);
+        reporter.on_step_finished(&step, &StepResult::Passed);
+        reporter.on_scenario_finished(&scenario);
+        reporter.on_rule_finished(&rule);
+        reporter.on_feature_finished(&feature);
         reporter.on_run_finished(&Outcome::default());
 
         let value: serde_json::Value = serde_json::from_slice(&reporter.into_inner()).unwrap();

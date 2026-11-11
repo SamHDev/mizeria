@@ -107,11 +107,22 @@ mod tests {
     fn forwards_to_both_children() {
         let mut joined = Joined(Recorder::default(), Recorder::default());
         joined.on_run_started();
+        let feature = FeatureEvent {
+            uri: "f.feature",
+            name: "F",
+            keyword: "Feature",
+            location: Location::new(1, 1),
+        };
         joined.on_step_finished(
             &StepEvent {
+                feature,
+                rule: None,
+                scenario_name: "s",
+                scenario_keyword: "Scenario",
+                scenario_location: Location::new(2, 1),
                 keyword: "Given ",
                 text: "x",
-                location: Location::new(1, 1),
+                location: Location::new(3, 1),
             },
             &StepResult::Passed,
         );

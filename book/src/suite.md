@@ -107,7 +107,9 @@ Tag a scenario (or feature / rule / Examples) with `@serial` so it runs alone un
 Pass `max = 1` (or use the sequential entrypoints) for a fully serial suite.
 
 Reporters are shared behind a mutex in concurrent modes; step-level output may
-interleave. Completion printers remain the recommended default.
+interleave. Wrap with `.normalized()` so an order-sensitive listener sees contiguous
+feature/scenario blocks — see [Listeners](listeners.md). Completion printers remain
+a good default; pair them with `.normalized()` when running concurrently.
 
 After the run, inspect [`Outcome`](outcomes.md) and exit non-zero on failure if you are
 in a binary or CI test harness.

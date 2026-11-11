@@ -5,6 +5,8 @@
 //! (on by default), [`ColourSyncPrinter`] adds ANSI styling and becomes [`Printer`].
 //! Enable the `json` feature for the legacy Cucumber JSON [`JsonReporter`].
 //! Compose multiple listeners with [`Listener::and`] / [`Joined`].
+//! Wrap with [`Listener::normalized`] / [`Normalized`] so concurrent runs feed
+//! an inner listener in sequential feature/rule/scenario order.
 
 mod ascii;
 mod buffer;
@@ -13,6 +15,7 @@ mod colour;
 mod joined;
 #[cfg(feature = "json")]
 mod json;
+mod normalize;
 
 pub use ascii::ASCIISyncPrinter;
 #[cfg(feature = "colour")]
@@ -20,6 +23,7 @@ pub use colour::{Colour, ColourSyncPrinter};
 pub use joined::Joined;
 #[cfg(feature = "json")]
 pub use json::JsonReporter;
+pub use normalize::Normalized;
 
 use crate::ast::{Location, ParseError};
 use crate::outcome::Outcome;
@@ -56,6 +60,8 @@ pub struct FeatureEvent<'a> {
 /// Borrowed view of a rule.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct RuleEvent<'a> {
+    /// Parent feature.
+    pub feature: FeatureEvent<'a>,
     /// Rule title.
     pub name: &'a str,
     /// Dialect keyword text (e.g. `"Rule"`).
@@ -67,6 +73,10 @@ pub struct RuleEvent<'a> {
 /// Borrowed view of a scenario (or scenario outline).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ScenarioEvent<'a> {
+    /// Parent feature.
+    pub feature: FeatureEvent<'a>,
+    /// Parent rule, when the scenario lives under one.
+    pub rule: Option<RuleEvent<'a>>,
     /// Scenario title.
     pub name: &'a str,
     /// Dialect keyword text (e.g. `"Scenario"`).
@@ -78,6 +88,16 @@ pub struct ScenarioEvent<'a> {
 /// Borrowed view of a step.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct StepEvent<'a> {
+    /// Parent feature.
+    pub feature: FeatureEvent<'a>,
+    /// Parent rule, when the scenario lives under one.
+    pub rule: Option<RuleEvent<'a>>,
+    /// Parent scenario name.
+    pub scenario_name: &'a str,
+    /// Parent scenario keyword.
+    pub scenario_keyword: &'a str,
+    /// Parent scenario location.
+    pub scenario_location: Location,
     /// Keyword including trailing space as lexed (e.g. `"Given "`).
     pub keyword: &'a str,
     /// Step text after the keyword (with example substitutions applied).
@@ -139,6 +159,22 @@ pub trait Listener: Send + Sync {
         R: Listener,
     {
         Joined(self, other)
+    }
+
+    /// Buffer interleaved concurrent events and forward them in sequential order.
+    ///
+    /// Use with [`Suite::run_concurrent`](crate::suite::Suite::run_concurrent) /
+    /// [`run_threaded`](crate::suite::Suite::run_threaded) when the inner listener
+    /// expects feature → rule → scenario → step nesting without interleaving.
+    ///
+    /// ```ignore
+    /// suite.with_reporter(Printer::stdout().normalized());
+    /// ```
+    fn normalized(self) -> Normalized<Self>
+    where
+        Self: Sized,
+    {
+        Normalized::new(self)
     }
 }
 
