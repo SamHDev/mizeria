@@ -34,7 +34,10 @@ let mut suite = Suite::new(|| ())
 suite
     .given(re(r"I have (\d+) cukes"), |n: u32| Put::new(Cukes(n)))
     .when(re(r"I eat (\d+) cukes"), |n: u32, cukes: Get<Cukes>| {
-        Put::new(Cukes(cukes.0 - n))
+        match cukes.0.checked_sub(n) {
+            Some(left) => Ok(Put::new(Cukes(left))),
+            None => fail!("cannot eat {n} cukes, only have {}", cukes.0),
+        }
     })
     .then(re(r"I have (\d+) cukes left"), |n: u32, cukes: GetRef<Cukes>| {
         if cukes.0 != n {
