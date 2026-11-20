@@ -31,8 +31,16 @@ features.exclude(Tags::parse("@wip").unwrap());
 let mut suite = Suite::new(|| ())
     .with_reporter(Printer::stdout());
 
-suite.given(re(r"I have (\d+) cukes"), |n: u32, cukes: GetOrDefault<Cukes>| {
-        Put::new(Cukes(cukes.0 + n))
+suite
+    .given(re(r"I have (\d+) cukes"), |n: u32| Put::new(Cukes(n)))
+    .when(re(r"I eat (\d+) cukes"), |n: u32, cukes: Get<Cukes>| {
+        Put::new(Cukes(cukes.0 - n))
+    })
+    .then(re(r"I have (\d+) cukes left"), |n: u32, cukes: GetRef<Cukes>| {
+        if cukes.0 != n {
+            fail!("expected {n} cukes left, got {}", cukes.0);
+        }
+        Ok(())
     });
 
 let _ = suite.run_blocking(&features);
